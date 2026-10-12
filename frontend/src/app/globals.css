@@ -22,6 +22,12 @@
     -moz-osx-font-smoothing: grayscale;
     overflow-x: hidden;
   }
+
+  input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="reset"]),
+  textarea,
+  select {
+    color: #0f172a;
+  }
 }
 
 /* Custom Scrollbar */

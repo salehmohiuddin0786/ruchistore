@@ -43,5 +43,6 @@ router.put(
   shopOwnerController.updateShopSettings
 );
 router.get("/earnings", shopOwnerController.getEarnings);
+router.post("/payout-request", shopOwnerController.requestPayout);
 
 module.exports = router;

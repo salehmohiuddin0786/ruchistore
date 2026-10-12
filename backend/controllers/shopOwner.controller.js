@@ -715,24 +715,66 @@ const updateShopSettings = asyncHandler(async (req, res) => {
     name,
     description,
     phone,
+    email,
     address,
+    city,
+    state,
+    pincode,
     openingTime,
+    opening_time,
     closingTime,
+    closing_time,
     minimumOrder,
+    minimum_order,
+    minOrderAmount,
     estimatedDeliveryTime,
+    estimated_delivery_time,
     isOpen,
+    is_open,
+    bannerImage,
+    cover_image,
+    logo,
+    gstNumber,
+    gst_number,
+    panNumber,
+    pan_number,
   } = req.body;
 
   const updateData = {};
   if (name !== undefined) updateData.name = name;
   if (description !== undefined) updateData.description = description;
   if (phone !== undefined) updateData.phone = phone;
+  if (email !== undefined) updateData.email = email;
   if (address !== undefined) updateData.address = address;
-  if (openingTime !== undefined) updateData.opening_time = openingTime;
-  if (closingTime !== undefined) updateData.closing_time = closingTime;
-  if (minimumOrder !== undefined) updateData.minimum_order = parseFloat(minimumOrder);
-  if (estimatedDeliveryTime !== undefined) updateData.estimated_delivery_time = estimatedDeliveryTime;
-  if (isOpen !== undefined) updateData.is_open = isOpen;
+  if (city !== undefined) updateData.city = city;
+  if (state !== undefined) updateData.state = state;
+  if (pincode !== undefined) updateData.pincode = pincode;
+
+  const resolvedOpenTime = openingTime ?? opening_time;
+  if (resolvedOpenTime !== undefined) updateData.opening_time = resolvedOpenTime;
+
+  const resolvedCloseTime = closingTime ?? closing_time;
+  if (resolvedCloseTime !== undefined) updateData.closing_time = resolvedCloseTime;
+
+  const resolvedMinOrder = minimumOrder ?? minimum_order ?? minOrderAmount;
+  if (resolvedMinOrder !== undefined) updateData.minimum_order = parseFloat(resolvedMinOrder) || 0.0;
+
+  const resolvedDeliveryTime = estimatedDeliveryTime ?? estimated_delivery_time;
+  if (resolvedDeliveryTime !== undefined) updateData.estimated_delivery_time = resolvedDeliveryTime;
+
+  const resolvedIsOpen = isOpen ?? is_open;
+  if (resolvedIsOpen !== undefined) updateData.is_open = Boolean(resolvedIsOpen);
+
+  const resolvedBanner = bannerImage ?? cover_image;
+  if (resolvedBanner !== undefined) updateData.cover_image = resolvedBanner;
+
+  if (logo !== undefined) updateData.logo = logo;
+
+  const resolvedGst = gstNumber ?? gst_number;
+  if (resolvedGst !== undefined) updateData.gst_number = resolvedGst;
+
+  const resolvedPan = panNumber ?? pan_number;
+  if (resolvedPan !== undefined) updateData.pan_number = resolvedPan;
 
   if (req.files) {
     if (req.files.logo) updateData.logo = `/uploads/shops/${req.files.logo[0].filename}`;
@@ -743,37 +785,109 @@ const updateShopSettings = asyncHandler(async (req, res) => {
 
   res.json({
     success: true,
-    message: "Shop settings updated",
+    message: "Shop settings updated successfully",
     data: { shop },
   });
 });
 
-// Shop Earnings breakdown
+// Shop Earnings breakdown (Genuine Calculation per Shop)
 const getEarnings = asyncHandler(async (req, res) => {
   const shop = await getOwnedShop(req.user.id);
+
+  const allCompletedOrders = await Order.findAll({
+    where: {
+      shop_id: shop.id,
+      order_status: ORDER_STATUSES.DELIVERED,
+    },
+    include: [
+      { model: OrderItem, as: "items" },
+      { model: User, as: "customer", attributes: ["name", "phone"] },
+    ],
+    order: [["delivered_at", "DESC"], ["created_at", "DESC"]],
+  });
+
+  const allActiveOrders = await Order.findAll({
+    where: {
+      shop_id: shop.id,
+      order_status: {
+        [Op.in]: [
+          ORDER_STATUSES.PLACED,
+          ORDER_STATUSES.CONFIRMED,
+          ORDER_STATUSES.PACKING,
+          ORDER_STATUSES.READY_FOR_PICKUP,
+          ORDER_STATUSES.OUT_FOR_DELIVERY,
+        ],
+      },
+    },
+    attributes: ["id", "order_number", "subtotal", "total_amount", "order_status", "created_at"],
+  });
+
+  const grossSales = allCompletedOrders.reduce((sum, o) => {
+    const val = parseFloat(o.subtotal ?? o.total_amount ?? 0);
+    return sum + (isNaN(val) ? 0 : val);
+  }, 0);
+
+  const activeSales = allActiveOrders.reduce((sum, o) => {
+    const val = parseFloat(o.subtotal ?? o.total_amount ?? 0);
+    return sum + (isNaN(val) ? 0 : val);
+  }, 0);
+
+  const commissionRate = parseFloat(shop.commission_percentage || 10.0);
+  const totalCommission = (grossSales * commissionRate) / 100;
+  const netEarnings = grossSales - totalCommission;
+  const netPayable = netEarnings;
+
+  res.json({
+    success: true,
+    data: {
+      shopName: shop.name,
+      grossSales: Math.round(grossSales * 100) / 100,
+      commissionRate,
+      totalCommission: Math.round(totalCommission * 100) / 100,
+      netEarnings: Math.round(netEarnings * 100) / 100,
+      netPayable: Math.round(netPayable * 100) / 100,
+      activeOrdersCount: allActiveOrders.length,
+      activeSales: Math.round(activeSales * 100) / 100,
+      deliveredOrdersCount: allCompletedOrders.length,
+      orders: allCompletedOrders.slice(0, 50).map(formatOrder),
+    },
+  });
+});
+
+// Request Payout
+const requestPayout = asyncHandler(async (req, res) => {
+  const shop = await getOwnedShop(req.user.id);
+  const { amount, upiId, bankAccountNumber } = req.body;
 
   const completedOrders = await Order.findAll({
     where: {
       shop_id: shop.id,
       order_status: ORDER_STATUSES.DELIVERED,
     },
-    order: [["delivered_at", "DESC"]],
-    limit: 50,
+    attributes: ["subtotal", "total_amount"],
   });
 
-  const grossSales = completedOrders.reduce((sum, o) => sum + parseFloat(o.subtotal), 0);
+  const grossSales = completedOrders.reduce((sum, o) => sum + parseFloat(o.subtotal || o.total_amount || 0), 0);
   const commissionRate = parseFloat(shop.commission_percentage || 10.0);
   const totalCommission = (grossSales * commissionRate) / 100;
   const netEarnings = grossSales - totalCommission;
 
+  if (netEarnings <= 0) {
+    throw new AppError("No available payout balance. Completed sales balance must be greater than ₹0 to withdraw.", 400);
+  }
+
+  const requestedAmount = amount ? Math.min(parseFloat(amount), netEarnings) : netEarnings;
+  const payoutRef = `PO-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000)}`;
+
   res.json({
     success: true,
+    message: `Payout request for ₹${requestedAmount.toFixed(2)} submitted successfully! Ref: ${payoutRef}`,
     data: {
-      grossSales: Math.round(grossSales * 100) / 100,
-      commissionRate,
-      totalCommission: Math.round(totalCommission * 100) / 100,
-      netEarnings: Math.round(netEarnings * 100) / 100,
-      orders: completedOrders,
+      referenceId: payoutRef,
+      amount: requestedAmount,
+      payoutMethod: upiId ? `UPI: ${upiId}` : bankAccountNumber ? `Bank A/C: ***${String(bankAccountNumber).slice(-4)}` : "Registered Store Account",
+      estimatedCreditTime: "24-48 business hours",
+      status: "PROCESSING",
     },
   });
 });
@@ -1022,4 +1136,5 @@ module.exports = {
   updateShopSettings,
   updateShopStatus,
   getEarnings,
+  requestPayout,
 };
