@@ -25,13 +25,22 @@ import apiClient from "../../api/apiClient";
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { user, isAuthenticated, logout, isAdmin, isShopOwner, isDeliveryPartner } = useAuth();
+  const { user, isAuthenticated, logout, isAdmin, isShopOwner, isDeliveryPartner, updateUser } = useAuth();
   const { showToast } = useToast();
 
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(user?.name || "");
   const [email, setEmail] = useState(user?.email || "");
+  const [phone, setPhone] = useState(user?.phone && !user.phone.startsWith("g_") ? user.phone : "");
   const [saving, setSaving] = useState(false);
+
+  React.useEffect(() => {
+    if (user) {
+      setName(user.name || "");
+      setEmail(user.email || "");
+      setPhone(user.phone && !user.phone.startsWith("g_") ? user.phone : "");
+    }
+  }, [user]);
 
   if (!isAuthenticated) {
     return (
@@ -47,11 +56,24 @@ export default function ProfilePage() {
 
   const handleSaveProfile = async (e) => {
     e.preventDefault();
+    const cleanPhone = phone.replace(/\D/g, "");
+    if (cleanPhone && cleanPhone.length !== 10) {
+      showToast("Please enter a valid 10-digit mobile number", "error");
+      return;
+    }
+
     try {
       setSaving(true);
-      const res = await apiClient.put("/users/profile", { name, email });
+      const res = await apiClient.put("/user/profile", {
+        name,
+        email,
+        phone: cleanPhone || undefined,
+      });
       if (res.data?.success) {
         showToast("Profile updated successfully", "success");
+        if (res.data.data?.user) {
+          updateUser(res.data.data.user);
+        }
         setIsEditing(false);
       }
     } catch (err) {
@@ -72,7 +94,8 @@ export default function ProfilePage() {
           <div>
             <h1 className="text-2xl font-black text-slate-900 tracking-tight">{user?.name}</h1>
             <p className="text-xs text-slate-500 flex items-center justify-center sm:justify-start gap-1.5 mt-0.5">
-              <Phone className="w-3.5 h-3.5" /> {user?.phone || "No phone linked"}
+              <Phone className="w-3.5 h-3.5" />{" "}
+              {user?.phone && !user.phone.startsWith("g_") ? `+91 ${user.phone}` : "No phone linked"}
             </p>
             {user?.email && (
               <p className="text-xs text-slate-500 flex items-center justify-center sm:justify-start gap-1.5">
@@ -100,15 +123,30 @@ export default function ProfilePage() {
           className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-4"
         >
           <h2 className="text-sm font-bold text-slate-900">Update Profile Details</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="text-xs font-semibold text-slate-700 block mb-1">Full Name</label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 outline-hidden"
+                placeholder="Your full name"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 outline-hidden focus:bg-white focus:border-emerald-500 transition-colors"
               />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-700 block mb-1">Mobile Number</label>
+              <div className="relative">
+                <span className="absolute left-3 top-2.5 text-xs font-bold text-slate-400 select-none">+91</span>
+                <input
+                  type="tel"
+                  maxLength={10}
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                  placeholder="10-digit mobile"
+                  className="w-full pl-11 pr-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 outline-hidden focus:bg-white focus:border-emerald-500 transition-colors font-medium"
+                />
+              </div>
             </div>
             <div>
               <label className="text-xs font-semibold text-slate-700 block mb-1">Email Address</label>
@@ -116,7 +154,8 @@ export default function ProfilePage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 outline-hidden"
+                placeholder="Your email address"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 outline-hidden focus:bg-white focus:border-emerald-500 transition-colors"
               />
             </div>
           </div>
