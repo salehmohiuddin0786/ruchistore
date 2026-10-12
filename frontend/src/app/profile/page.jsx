@@ -22,6 +22,7 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import apiClient from "../../api/apiClient";
+import ProtectedRoute from "../../components/ProtectedRoute";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -42,17 +43,7 @@ export default function ProfilePage() {
     }
   }, [user]);
 
-  if (!isAuthenticated) {
-    return (
-      <div className="max-w-md mx-auto py-24 px-4 text-center space-y-4">
-        <User className="w-12 h-12 text-slate-300 mx-auto" />
-        <h2 className="text-xl font-bold text-slate-800">Please sign in to view your profile</h2>
-        <Link href="/" className="inline-block px-5 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-xs">
-          Return Home
-        </Link>
-      </div>
-    );
-  }
+
 
   const handleSaveProfile = async (e) => {
     e.preventDefault();
@@ -84,7 +75,11 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <ProtectedRoute
+      title="My Profile"
+      description="Sign in to view and manage your account details, mobile number, and preferences."
+    >
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
       {/* Header Profile Card */}
       <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center sm:items-start justify-between gap-4">
         <div className="flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
@@ -277,6 +272,7 @@ export default function ProfilePage() {
           <LogOut className="w-4 h-4" /> Sign Out
         </button>
       </div>
-    </div>
+      </div>
+    </ProtectedRoute>
   );
 }

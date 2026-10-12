@@ -44,5 +44,6 @@ router.put(
 );
 router.get("/earnings", shopOwnerController.getEarnings);
 router.post("/payout-request", shopOwnerController.requestPayout);
+router.post("/upload-image", uploadShop.single("image"), shopOwnerController.uploadImage);
 
 module.exports = router;

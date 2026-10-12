@@ -60,6 +60,13 @@ export default function DeliveryLayout({ children }) {
     }
   }, [isAuthenticated]);
 
+  useEffect(() => {
+    if (!loading && (!isAuthenticated || !isDeliveryPartner) && pathname !== "/delivery/login") {
+      router.replace("/delivery/login");
+    }
+  }, [loading, isAuthenticated, isDeliveryPartner, pathname, router]);
+
+
   const loadDeliveryProfile = async () => {
     try {
       const res = await apiClient.get("/delivery/profile");
@@ -183,80 +190,33 @@ export default function DeliveryLayout({ children }) {
       />
     );
   }
-
-  if (!loading && (!isAuthenticated || !isDeliveryPartner)) {
+  if (loading) {
     return (
-      <div className="min-h-screen bg-slate-900 text-slate-100 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-slate-800 border border-slate-700 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-500 text-slate-950 flex items-center justify-center font-black shadow-lg shadow-emerald-500/30">
-              <Bike className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="text-xl font-black text-white">Delivery Partner App</h1>
-              <p className="text-xs text-slate-400">Rider & Fleet Management Portal</p>
-            </div>
-          </div>
-
-          <div className="bg-emerald-950/40 border border-emerald-800/40 rounded-2xl p-4 text-xs space-y-1.5">
-            <p className="font-bold text-emerald-300 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5" /> Standard Delivery Credentials
-            </p>
-            <p className="text-slate-300 font-mono">Mail: <strong className="text-white">delivery@store</strong></p>
-            <p className="text-slate-300 font-mono">Pass: <strong className="text-white">Admin@123</strong></p>
-          </div>
-
-          <form onSubmit={handleDeliveryLogin} className="space-y-4">
-            {loginError && (
-              <p className="text-xs font-semibold text-rose-400 bg-rose-950/50 p-3 rounded-xl border border-rose-800/50">
-                {loginError}
-              </p>
-            )}
-
-            <div>
-              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                Rider Username / Email
-              </label>
-              <input
-                type="text"
-                value={deliveryEmail}
-                onChange={(e) => setDeliveryEmail(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl bg-slate-700/80 border border-slate-600 text-white font-medium text-sm outline-hidden focus:border-emerald-400"
-                placeholder="delivery@store"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                Password
-              </label>
-              <input
-                type="password"
-                value={deliveryPassword}
-                onChange={(e) => setDeliveryPassword(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl bg-slate-700/80 border border-slate-600 text-white font-medium text-sm outline-hidden focus:border-emerald-400"
-                placeholder="••••••••"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loginLoading}
-              className="w-full py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm shadow-lg shadow-emerald-500/30 transition-all cursor-pointer disabled:opacity-50"
-            >
-              {loginLoading ? "Authenticating..." : "Sign In to Delivery App"}
-            </button>
-          </form>
-
-          <div className="pt-2 text-center">
-            <Link href="/" className="text-xs text-slate-400 hover:text-slate-200 transition-colors inline-flex items-center gap-1">
-              <ArrowLeft className="w-3.5 h-3.5" /> Back to Customer Store
-            </Link>
-          </div>
-        </div>
+      <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col items-center justify-center space-y-3">
+        <Bike className="w-10 h-10 text-emerald-500 animate-bounce" />
+        <p className="text-xs text-slate-400 font-bold">Verifying rider fleet credentials & active permissions...</p>
       </div>
     );
   }
+
+  if (!isAuthenticated || !isDeliveryPartner) {
+    return (
+      <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col items-center justify-center p-4 space-y-4 text-center">
+        <Bike className="w-12 h-12 text-emerald-500 animate-pulse" />
+        <h2 className="text-xl font-black text-white">Rider Authentication Required</h2>
+        <p className="text-xs text-slate-400 max-w-sm">
+          You need an approved Delivery Partner account to access the rider console. Redirecting to login...
+        </p>
+        <Link
+          href="/delivery/login"
+          className="px-6 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black text-xs shadow-lg shadow-emerald-500/30 transition-all"
+        >
+          Go to Delivery Login
+        </Link>
+      </div>
+    );
+  }
+
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col">

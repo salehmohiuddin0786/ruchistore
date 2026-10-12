@@ -892,6 +892,23 @@ const requestPayout = asyncHandler(async (req, res) => {
   });
 });
 
+// Upload Shop Image (Banner or Logo)
+const uploadImage = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    throw new AppError("Please select an image file to upload", 400, "MISSING_FILE");
+  }
+
+  const relativePath = `/uploads/shops/${req.file.filename}`;
+  res.json({
+    success: true,
+    message: "Image uploaded successfully",
+    data: {
+      url: relativePath,
+      filename: req.file.filename,
+    },
+  });
+});
+
 // Update Shop Open/Closed Status
 const updateShopStatus = asyncHandler(async (req, res) => {
   const shop = await getOwnedShop(req.user.id);
@@ -1137,4 +1154,5 @@ module.exports = {
   updateShopStatus,
   getEarnings,
   requestPayout,
+  uploadImage,
 };

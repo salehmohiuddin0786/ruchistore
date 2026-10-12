@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Store,
   MapPin,
@@ -17,9 +17,27 @@ import {
   FileText,
   Truck,
   Sparkles,
+  UploadCloud,
+  Upload,
+  Camera,
+  Trash2,
+  RefreshCw,
 } from "lucide-react";
 import apiClient from "../../../api/apiClient";
 import { useToast } from "../../../context/ToastContext";
+
+// Helper to resolve relative upload paths to full static URLs
+const resolveImageUrl = (url) => {
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("blob:") || url.startsWith("data:")) {
+    return url;
+  }
+  if (url.startsWith("/")) {
+    const apiHost = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/?$/, "") || "http://localhost:5001";
+    return `${apiHost}${url}`;
+  }
+  return url;
+};
 
 export default function ShopOwnerProfilePage() {
   const { showToast } = useToast();
@@ -27,6 +45,12 @@ export default function ShopOwnerProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [togglingStatus, setTogglingStatus] = useState(false);
+
+  // Uploading state & refs
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const bannerFileRef = useRef(null);
+  const logoFileRef = useRef(null);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -107,6 +131,80 @@ export default function ShopOwnerProfilePage() {
     }
   };
 
+  // BANNER UPLOAD HANDLER
+  const handleBannerFileSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      showToast("Please upload an image file (JPG, PNG, WEBP)", "error");
+      return;
+    }
+    if (file.size > 6 * 1024 * 1024) {
+      showToast("Banner file must be smaller than 6MB", "error");
+      return;
+    }
+
+    try {
+      setUploadingBanner(true);
+      const uploadPayload = new FormData();
+      uploadPayload.append("image", file);
+
+      const res = await apiClient.post("/shop-owner/upload-image", uploadPayload, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      if (res.data?.success) {
+        const uploadedPath = res.data.data.url;
+        setFormData((prev) => ({ ...prev, bannerImage: uploadedPath }));
+        showToast("Banner image uploaded successfully!", "success");
+      }
+    } catch (err) {
+      console.error("Banner upload failed:", err);
+      showToast(err.response?.data?.message || "Failed to upload banner image", "error");
+    } finally {
+      setUploadingBanner(false);
+      if (bannerFileRef.current) bannerFileRef.current.value = "";
+    }
+  };
+
+  // LOGO UPLOAD HANDLER
+  const handleLogoFileSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      showToast("Please upload an image file (JPG, PNG, WEBP)", "error");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      showToast("Logo file must be smaller than 5MB", "error");
+      return;
+    }
+
+    try {
+      setUploadingLogo(true);
+      const uploadPayload = new FormData();
+      uploadPayload.append("image", file);
+
+      const res = await apiClient.post("/shop-owner/upload-image", uploadPayload, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      if (res.data?.success) {
+        const uploadedPath = res.data.data.url;
+        setFormData((prev) => ({ ...prev, logo: uploadedPath }));
+        showToast("Store logo uploaded successfully!", "success");
+      }
+    } catch (err) {
+      console.error("Logo upload failed:", err);
+      showToast(err.response?.data?.message || "Failed to upload logo", "error");
+    } finally {
+      setUploadingLogo(false);
+      if (logoFileRef.current) logoFileRef.current.value = "";
+    }
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
     try {
@@ -138,7 +236,7 @@ export default function ShopOwnerProfilePage() {
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            Configure your customer-facing storefront, operating timings, and contact info
+            Configure your customer-facing storefront, upload branding images, and set operating hours
           </p>
         </div>
 
@@ -149,7 +247,7 @@ export default function ShopOwnerProfilePage() {
               {formData.isOpen ? "Store is Open" : "Store is Closed"}
             </p>
             <p className="text-[10px] text-slate-400">
-              {formData.isOpen ? "Accepting orders" : "Customer orders paused"}
+              {formData.isOpen ? "Accepting customer orders" : "Orders paused"}
             </p>
           </div>
           <button
@@ -170,23 +268,24 @@ export default function ShopOwnerProfilePage() {
 
       {/* Customer Storefront Preview Banner Card */}
       <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="relative h-44 sm:h-52 bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 overflow-hidden">
+        <div className="relative h-48 sm:h-56 bg-gradient-to-r from-purple-950 via-slate-900 to-indigo-950 overflow-hidden">
           {formData.bannerImage ? (
             <img
-              src={formData.bannerImage}
+              src={resolveImageUrl(formData.bannerImage)}
               alt="Store Banner"
-              className="w-full h-full object-cover object-center opacity-85"
+              className="w-full h-full object-cover object-center opacity-90"
               onError={(e) => {
                 e.target.style.display = "none";
               }}
             />
           ) : (
-            <div className="absolute inset-0 flex items-center justify-center text-purple-300/40">
-              <Store className="w-20 h-20" />
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-purple-300/40 gap-2">
+              <Store className="w-16 h-16" />
+              <span className="text-xs font-bold text-purple-200/50">Upload banner below to customize storefront header</span>
             </div>
           )}
 
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-black/20" />
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-transparent to-black/25" />
 
           {/* Status pill on banner */}
           <div className="absolute top-4 right-4 flex items-center gap-2">
@@ -204,10 +303,10 @@ export default function ShopOwnerProfilePage() {
 
           {/* Store details on banner bottom */}
           <div className="absolute bottom-4 left-6 right-6 flex items-end gap-4 text-white">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-white p-1 shadow-xl flex-shrink-0 border-2 border-white/80 overflow-hidden">
+            <div className="relative w-18 h-18 sm:w-22 sm:h-22 rounded-2xl bg-white p-1 shadow-2xl flex-shrink-0 border-2 border-white/90 overflow-hidden group">
               {formData.logo ? (
                 <img
-                  src={formData.logo}
+                  src={resolveImageUrl(formData.logo)}
                   alt="Store Logo"
                   className="w-full h-full object-cover rounded-xl"
                   onError={(e) => {
@@ -215,10 +314,19 @@ export default function ShopOwnerProfilePage() {
                   }}
                 />
               ) : (
-                <div className="w-full h-full bg-purple-600 text-white flex items-center justify-center font-black text-2xl rounded-xl">
+                <div className="w-full h-full bg-purple-600 text-white flex items-center justify-center font-black text-2xl sm:text-3xl rounded-xl">
                   {formData.name ? formData.name.charAt(0).toUpperCase() : "R"}
                 </div>
               )}
+              <button
+                type="button"
+                onClick={() => logoFileRef.current?.click()}
+                title="Change Logo"
+                className="absolute inset-0 bg-black/60 text-white opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-[10px] font-bold transition-opacity cursor-pointer rounded-xl"
+              >
+                <Camera className="w-4 h-4 mb-0.5" />
+                Change
+              </button>
             </div>
 
             <div className="flex-1 pb-1">
@@ -247,7 +355,173 @@ export default function ShopOwnerProfilePage() {
 
       {/* Main Settings Form */}
       <form onSubmit={handleSave} className="space-y-6">
-        {/* Section 1: Store Identity */}
+        {/* Section 1: Store Media & Image Uploads (PROMINENT AT TOP) */}
+        <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200 shadow-xs space-y-5">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2.5 bg-purple-50 text-purple-700 rounded-xl">
+                <UploadCloud className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-slate-900">Store Media & Image Uploads</h3>
+                <p className="text-[11px] text-slate-400">Upload your store cover banner and square logo image directly from your device</p>
+              </div>
+            </div>
+            <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+              Direct File Upload
+            </span>
+          </div>
+
+          {/* Hidden File Inputs */}
+          <input
+            ref={bannerFileRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/jpg"
+            onChange={handleBannerFileSelect}
+            className="hidden"
+          />
+          <input
+            ref={logoFileRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/jpg"
+            onChange={handleLogoFileSelect}
+            className="hidden"
+          />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-xs">
+            {/* Banner Upload Card */}
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="font-bold text-slate-800 flex items-center gap-1.5">
+                  <ImageIcon className="w-4 h-4 text-purple-600" />
+                  Store Banner / Cover Photo
+                </label>
+                {formData.bannerImage && (
+                  <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                    Uploaded
+                  </span>
+                )}
+              </div>
+
+              {formData.bannerImage ? (
+                <div className="relative h-28 rounded-xl overflow-hidden border border-slate-200 bg-slate-900">
+                  <img
+                    src={resolveImageUrl(formData.bannerImage)}
+                    alt="Uploaded Banner Preview"
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center gap-2 opacity-90 sm:opacity-0 hover:opacity-100 transition-opacity">
+                    <button
+                      type="button"
+                      onClick={() => bannerFileRef.current?.click()}
+                      disabled={uploadingBanner}
+                      className="px-3 py-1.5 rounded-lg bg-white/90 hover:bg-white text-slate-900 font-bold text-[11px] shadow-sm flex items-center gap-1 cursor-pointer"
+                    >
+                      <Camera className="w-3.5 h-3.5" />
+                      {uploadingBanner ? "Uploading..." : "Replace"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData((prev) => ({ ...prev, bannerImage: "" }))}
+                      className="p-1.5 rounded-lg bg-rose-600/90 hover:bg-rose-600 text-white font-bold shadow-sm cursor-pointer"
+                      title="Remove banner"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  onClick={() => bannerFileRef.current?.click()}
+                  className="h-28 rounded-xl border-2 border-dashed border-purple-200 hover:border-purple-400 bg-purple-50/40 hover:bg-purple-50/70 flex flex-col items-center justify-center text-center p-3 cursor-pointer transition-colors"
+                >
+                  <UploadCloud className="w-6 h-6 text-purple-600 mb-1" />
+                  <span className="font-bold text-slate-800 text-xs">
+                    {uploadingBanner ? "Uploading Banner..." : "Click to Upload Banner Image"}
+                  </span>
+                  <span className="text-[10px] text-slate-400 mt-0.5">JPG, PNG, WEBP (Landscape, Max 6MB)</span>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => bannerFileRef.current?.click()}
+                disabled={uploadingBanner}
+                className="w-full py-2.5 rounded-xl bg-white border border-slate-200 hover:bg-purple-50 hover:border-purple-300 text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+              >
+                <Upload className="w-3.5 h-3.5 text-purple-600" />
+                {uploadingBanner ? "Uploading File..." : "Choose Banner File"}
+              </button>
+            </div>
+
+            {/* Logo Upload Card */}
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="font-bold text-slate-800 flex items-center gap-1.5">
+                  <Camera className="w-4 h-4 text-purple-600" />
+                  Store Square Logo / Icon
+                </label>
+                {formData.logo && (
+                  <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                    Uploaded
+                  </span>
+                )}
+              </div>
+
+              {formData.logo ? (
+                <div className="relative h-28 rounded-xl overflow-hidden border border-slate-200 bg-slate-100 flex items-center justify-center">
+                  <img
+                    src={resolveImageUrl(formData.logo)}
+                    alt="Uploaded Logo Preview"
+                    className="w-24 h-24 object-cover rounded-xl shadow-xs"
+                  />
+                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center gap-2 opacity-90 sm:opacity-0 hover:opacity-100 transition-opacity">
+                    <button
+                      type="button"
+                      onClick={() => logoFileRef.current?.click()}
+                      disabled={uploadingLogo}
+                      className="px-3 py-1.5 rounded-lg bg-white/90 hover:bg-white text-slate-900 font-bold text-[11px] shadow-sm flex items-center gap-1 cursor-pointer"
+                    >
+                      <Camera className="w-3.5 h-3.5" />
+                      {uploadingLogo ? "Uploading..." : "Replace"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData((prev) => ({ ...prev, logo: "" }))}
+                      className="p-1.5 rounded-lg bg-rose-600/90 hover:bg-rose-600 text-white font-bold shadow-sm cursor-pointer"
+                      title="Remove logo"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  onClick={() => logoFileRef.current?.click()}
+                  className="h-28 rounded-xl border-2 border-dashed border-purple-200 hover:border-purple-400 bg-purple-50/40 hover:bg-purple-50/70 flex flex-col items-center justify-center text-center p-3 cursor-pointer transition-colors"
+                >
+                  <Store className="w-6 h-6 text-purple-600 mb-1" />
+                  <span className="font-bold text-slate-800 text-xs">
+                    {uploadingLogo ? "Uploading Logo..." : "Click to Upload Store Logo"}
+                  </span>
+                  <span className="text-[10px] text-slate-400 mt-0.5">JPG, PNG, WEBP (Square 1:1, Max 5MB)</span>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => logoFileRef.current?.click()}
+                disabled={uploadingLogo}
+                className="w-full py-2.5 rounded-xl bg-white border border-slate-200 hover:bg-purple-50 hover:border-purple-300 text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+              >
+                <Upload className="w-3.5 h-3.5 text-purple-600" />
+                {uploadingLogo ? "Uploading File..." : "Choose Logo File"}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Section 2: Storefront Identity */}
         <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200 shadow-xs space-y-4">
           <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
             <div className="p-2 bg-purple-50 text-purple-600 rounded-xl">
@@ -329,7 +603,7 @@ export default function ShopOwnerProfilePage() {
           </div>
         </div>
 
-        {/* Section 2: Contact & Operating Hours */}
+        {/* Section 3: Contact & Operating Hours */}
         <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200 shadow-xs space-y-4">
           <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
             <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
@@ -401,7 +675,7 @@ export default function ShopOwnerProfilePage() {
           </div>
         </div>
 
-        {/* Section 3: Physical Address & Location */}
+        {/* Section 4: Physical Store Location */}
         <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200 shadow-xs space-y-4">
           <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
             <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
@@ -465,55 +739,6 @@ export default function ShopOwnerProfilePage() {
                   className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-300 text-slate-900 font-bold text-xs placeholder:text-slate-400 outline-hidden focus:border-purple-600 focus:ring-2 focus:ring-purple-100 transition-all shadow-xs"
                 />
               </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Section 4: Store Media & Branding */}
-        <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200 shadow-xs space-y-4">
-          <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-            <div className="p-2 bg-amber-50 text-amber-600 rounded-xl">
-              <ImageIcon className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="text-sm font-black text-slate-900">Store Media & Branding Photos</h3>
-              <p className="text-[11px] text-slate-400">High-resolution banner and square logo image URLs</p>
-            </div>
-          </div>
-
-          <div className="space-y-4 text-xs">
-            <div>
-              <label className="font-bold text-slate-800 block mb-1.5">
-                Store Banner Image URL
-              </label>
-              <input
-                type="url"
-                value={formData.bannerImage}
-                onChange={(e) => setFormData({ ...formData, bannerImage: e.target.value })}
-                placeholder="https://images.unsplash.com/photo-..."
-                style={{ color: "#0f172a", backgroundColor: "#ffffff" }}
-                className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-300 text-slate-900 font-bold text-xs placeholder:text-slate-400 outline-hidden focus:border-purple-600 focus:ring-2 focus:ring-purple-100 transition-all shadow-xs"
-              />
-              <span className="text-[10px] text-slate-400 block mt-1">
-                Recommended aspect ratio: 16:9 or 3:1 (horizontal landscape)
-              </span>
-            </div>
-
-            <div>
-              <label className="font-bold text-slate-800 block mb-1.5">
-                Store Square Logo URL
-              </label>
-              <input
-                type="url"
-                value={formData.logo}
-                onChange={(e) => setFormData({ ...formData, logo: e.target.value })}
-                placeholder="https://images.unsplash.com/photo-..."
-                style={{ color: "#0f172a", backgroundColor: "#ffffff" }}
-                className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-300 text-slate-900 font-bold text-xs placeholder:text-slate-400 outline-hidden focus:border-purple-600 focus:ring-2 focus:ring-purple-100 transition-all shadow-xs"
-              />
-              <span className="text-[10px] text-slate-400 block mt-1">
-                Recommended aspect ratio: 1:1 (square avatar)
-              </span>
             </div>
           </div>
         </div>

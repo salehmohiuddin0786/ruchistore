@@ -26,6 +26,10 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# Uploads
+backend/uploads/*
+!backend/uploads/**/.gitkeep
+
 # System & Editor files
 .DS_Store
 Thumbs.db

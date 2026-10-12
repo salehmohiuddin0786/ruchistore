@@ -20,6 +20,7 @@ import apiClient from "../../api/apiClient";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import { getCurrentGeoAddress } from "../../lib/geo";
+import ProtectedRoute from "../../components/ProtectedRoute";
 
 export default function AddressesPage() {
   const router = useRouter();
@@ -173,20 +174,12 @@ export default function AddressesPage() {
     }
   };
 
-  if (!isAuthenticated) {
-    return (
-      <div className="max-w-md mx-auto py-24 px-4 text-center space-y-4">
-        <MapPin className="w-12 h-12 text-slate-300 mx-auto" />
-        <h2 className="text-xl font-bold text-slate-800">Sign in to manage addresses</h2>
-        <Link href="/" className="inline-block px-5 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-xs">
-          Return Home
-        </Link>
-      </div>
-    );
-  }
-
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <ProtectedRoute
+      title="Saved Addresses"
+      description="Sign in to view, edit, or add your delivery addresses for seamless grocery delivery."
+    >
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between pb-4 border-b border-slate-200">
         <div className="flex items-center gap-3">
@@ -481,6 +474,7 @@ export default function AddressesPage() {
           ))}
         </div>
       )}
-    </div>
+      </div>
+    </ProtectedRoute>
   );
 }

@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import apiClient from "../../api/apiClient";
 import { useAuth } from "../../context/AuthContext";
+import ProtectedRoute from "../../components/ProtectedRoute";
 
 const STATUS_COLOR_MAP = {
   PLACED: "bg-blue-50 text-blue-700 border-blue-200",
@@ -56,21 +57,12 @@ export default function OrdersPage() {
     }
   };
 
-  if (!isAuthenticated) {
-    return (
-      <div className="max-w-md mx-auto py-24 px-4 text-center space-y-4">
-        <Package className="w-12 h-12 text-slate-300 mx-auto" />
-        <h2 className="text-xl font-bold text-slate-800">Sign in to view your orders</h2>
-        <p className="text-xs text-slate-500">Track current deliveries and browse your grocery order history.</p>
-        <Link href="/" className="inline-block px-5 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-xs">
-          Return Home
-        </Link>
-      </div>
-    );
-  }
-
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <ProtectedRoute
+      title="My Orders"
+      description="Sign in to track live grocery deliveries, browse order history, and view order receipts."
+    >
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
       {/* Title */}
       <div>
         <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
@@ -178,6 +170,7 @@ export default function OrdersPage() {
           })}
         </div>
       )}
-    </div>
+      </div>
+    </ProtectedRoute>
   );
 }

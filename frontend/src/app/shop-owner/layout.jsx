@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Store,
   LayoutDashboard,
@@ -317,6 +317,27 @@ export default function ShopOwnerLayout({ children }) {
     },
   ];
 
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && (!isAuthenticated || !isShopOwner) && pathname !== "/shop-owner/login") {
+      router.replace("/shop-owner/login");
+    }
+  }, [loading, isAuthenticated, isShopOwner, pathname, router]);
+
+  /* =========================================================
+     LOADING STATE
+  ========================================================= */
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col items-center justify-center space-y-3">
+        <Store className="w-10 h-10 text-purple-500 animate-pulse" />
+        <p className="text-xs text-slate-400 font-bold">Verifying store credentials & security permissions...</p>
+      </div>
+    );
+  }
+
   /* =========================================================
      PENDING ADMIN APPROVAL SCREEN
   ========================================================= */
@@ -339,126 +360,23 @@ export default function ShopOwnerLayout({ children }) {
   }
 
   /* =========================================================
-     LOGIN SCREEN
+     UNAUTHENTICATED / ACCESS DENIED - ROUTE PROTECTION
   ========================================================= */
 
-  if (
-    !loading &&
-    (!isAuthenticated || !isShopOwner)
-  ) {
+  if (!isAuthenticated || !isShopOwner) {
     return (
-      <div className="min-h-screen bg-slate-900 text-slate-100 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-slate-800 border border-slate-700 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
-
-          {/* Logo */}
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-purple-600 flex items-center justify-center text-white font-bold shadow-lg shadow-purple-600/30">
-              <Store className="w-6 h-6" />
-            </div>
-
-            <div>
-              <h1 className="text-xl font-black text-white">
-                Shop Owner Portal
-              </h1>
-
-              <p className="text-xs text-slate-400">
-                Ruchi Mart Store Management
-              </p>
-            </div>
-          </div>
-
-          {/* Demo Credentials */}
-          <div className="bg-purple-950/40 border border-purple-800/40 rounded-2xl p-4 text-xs space-y-1.5">
-
-            <p className="font-bold text-purple-300 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5" />
-
-              Standard Shop Owner Credentials
-            </p>
-
-            <p className="text-slate-300 font-mono">
-              Mail:{" "}
-              <strong className="text-white">
-                owner@store
-              </strong>
-            </p>
-
-            <p className="text-slate-300 font-mono">
-              Pass:{" "}
-              <strong className="text-white">
-                Admin@123
-              </strong>
-            </p>
-          </div>
-
-          {/* Login Form */}
-          <form
-            onSubmit={handleOwnerLogin}
-            className="space-y-4"
-          >
-            {loginError && (
-              <p className="text-xs font-semibold text-rose-400 bg-rose-950/50 p-3 rounded-xl border border-rose-800/50">
-                {loginError}
-              </p>
-            )}
-
-            {/* Email */}
-            <div>
-              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                Owner Username / Email
-              </label>
-
-              <input
-                type="text"
-                value={ownerEmail}
-                onChange={(e) =>
-                  setOwnerEmail(e.target.value)
-                }
-                className="w-full px-4 py-3 rounded-xl bg-slate-700/80 border border-slate-600 text-white font-medium text-sm outline-hidden focus:border-purple-400"
-                placeholder="owner@store"
-              />
-            </div>
-
-            {/* Password */}
-            <div>
-              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                Password
-              </label>
-
-              <input
-                type="password"
-                value={ownerPassword}
-                onChange={(e) =>
-                  setOwnerPassword(e.target.value)
-                }
-                className="w-full px-4 py-3 rounded-xl bg-slate-700/80 border border-slate-600 text-white font-medium text-sm outline-hidden focus:border-purple-400"
-                placeholder="••••••••"
-              />
-            </div>
-
-            {/* Submit */}
-            <button
-              type="submit"
-              disabled={loginLoading}
-              className="w-full py-3.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm shadow-lg shadow-purple-600/30 transition-all cursor-pointer disabled:opacity-50"
-            >
-              {loginLoading
-                ? "Authenticating..."
-                : "Sign In to Shop Owner Portal"}
-            </button>
-          </form>
-
-          {/* Back */}
-          <div className="pt-2 text-center">
-            <Link
-              href="/"
-              className="text-xs text-slate-400 hover:text-slate-200 transition-colors inline-flex items-center gap-1"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              Back to Customer Store
-            </Link>
-          </div>
-        </div>
+      <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col items-center justify-center p-4 space-y-4 text-center">
+        <Store className="w-12 h-12 text-purple-500 animate-pulse" />
+        <h2 className="text-xl font-black text-white">Merchant Authentication Required</h2>
+        <p className="text-xs text-slate-400 max-w-sm">
+          You need an approved Shop Owner account to view this portal. Redirecting to merchant login...
+        </p>
+        <Link
+          href="/shop-owner/login"
+          className="px-6 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-lg shadow-purple-600/30 transition-all"
+        >
+          Go to Shop Owner Login
+        </Link>
       </div>
     );
   }

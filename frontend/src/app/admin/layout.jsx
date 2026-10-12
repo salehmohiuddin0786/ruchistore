@@ -83,7 +83,16 @@ export default function AdminLayout({ children }) {
     },
   ];
 
-  if (!loading && (!isAuthenticated || !isAdmin)) {
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center space-y-3">
+        <ShieldCheck className="w-10 h-10 text-indigo-500 animate-pulse" />
+        <p className="text-xs text-slate-400 font-bold">Verifying SuperAdmin security permissions...</p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || !isAdmin) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">

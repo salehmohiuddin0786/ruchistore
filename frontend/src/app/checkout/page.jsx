@@ -31,6 +31,7 @@ import apiClient from "../../api/apiClient";
 import { isShopOpen } from "../../lib/shopUtils";
 import AuthModal from "../../components/AuthModal";
 import { getCurrentGeoAddress } from "../../lib/geo";
+import ProtectedRoute from "../../components/ProtectedRoute";
 
 // Helper to load Razorpay SDK dynamically
 const loadRazorpayScript = () => {
@@ -387,7 +388,11 @@ export default function CheckoutPage() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <ProtectedRoute
+      title="Checkout"
+      description="Please sign in to select your delivery address and complete your grocery order."
+    >
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
       {/* Top Header */}
       <div className="flex items-center gap-3">
         <button
@@ -927,6 +932,7 @@ export default function CheckoutPage() {
 
       {/* Auth Modal for Unauthenticated Users */}
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
-    </div>
+      </div>
+    </ProtectedRoute>
   );
 }
