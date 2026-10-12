@@ -81,7 +81,11 @@ export default function HomePage() {
       }
 
       if (couponRes.status === "fulfilled" && couponRes.value.data?.success) {
-        setCoupons(couponRes.value.data.data || []);
+        const rawCoupons = couponRes.value.data.data;
+        const list = Array.isArray(rawCoupons)
+          ? rawCoupons
+          : rawCoupons?.coupons || couponRes.value.data.coupons || [];
+        setCoupons(Array.isArray(list) ? list : []);
       }
     } catch (err) {
       console.error("Failed to fetch home page data", err);
