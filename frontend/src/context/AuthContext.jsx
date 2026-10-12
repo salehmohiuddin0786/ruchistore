@@ -115,6 +115,61 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Sign in with Google via Firebase
+  const loginWithGoogle = async () => {
+    try {
+      const { auth, googleProvider } = await import("../lib/firebase");
+      if (!auth || !googleProvider) {
+        return {
+          success: false,
+          message:
+            "Firebase is not initialized. Please set NEXT_PUBLIC_FIREBASE_API_KEY in frontend/.env.local",
+        };
+      }
+
+      const { signInWithPopup } = await import("firebase/auth");
+      const result = await signInWithPopup(auth, googleProvider);
+      const fbUser = result.user;
+      const idToken = await fbUser.getIdToken();
+
+      const res = await apiClient.post("/auth/google", {
+        idToken,
+        email: fbUser.email,
+        name: fbUser.displayName,
+        photoURL: fbUser.photoURL,
+        phone: fbUser.phoneNumber || undefined,
+        uid: fbUser.uid,
+      });
+
+      const { user: userData, token } = res.data.data;
+
+      localStorage.setItem("token", token);
+      localStorage.setItem("user", JSON.stringify(userData));
+      setUser(userData);
+      getSocket();
+
+      return { success: true, user: userData };
+    } catch (error) {
+      console.error("Google login error:", error);
+      let message =
+        error.response?.data?.message ||
+        error.message ||
+        "Failed to sign in with Google";
+
+      if (error.code === "auth/popup-closed-by-user") {
+        message = "Google sign-in popup was closed before completing.";
+      } else if (error.code === "auth/unauthorized-domain") {
+        message =
+          "Domain unauthorized: Please add 'localhost' in Firebase Console > Authentication > Settings > Authorized domains.";
+      } else if (error.code === "auth/invalid-api-key") {
+        message =
+          "Invalid Firebase API key. Please check NEXT_PUBLIC_FIREBASE_API_KEY in frontend/.env.local";
+      }
+
+      return { success: false, message };
+    }
+  };
+
   // Logout
   const logout = async () => {
     try {
@@ -150,6 +205,7 @@ export const AuthProvider = ({ children }) => {
         login,
         requestOtp,
         loginWithOtp,
+        loginWithGoogle,
         register,
         logout,
       }}

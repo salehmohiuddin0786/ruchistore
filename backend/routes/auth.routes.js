@@ -8,6 +8,7 @@ router.post("/send-otp", otpLimiter, authController.requestOtp);
 router.post("/verify-otp", authController.verifyOtpAndLogin);
 router.post("/login", authLimiter, authController.loginWithPassword);
 router.post("/register", authLimiter, authController.register);
+router.post("/google", authLimiter, authController.loginWithGoogle);
 router.get("/me", protect, authController.getMe);
 router.post("/logout", authController.logout);
 

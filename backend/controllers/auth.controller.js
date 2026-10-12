@@ -234,6 +234,76 @@ const getMe = asyncHandler(async (req, res) => {
   });
 });
 
+// Google OAuth / Firebase Login
+const loginWithGoogle = asyncHandler(async (req, res) => {
+  const { idToken, email, name, photoURL, phone, uid } = req.body;
+
+  if (!email) {
+    throw new AppError("Email is required for Google Sign-In", 400, "MISSING_EMAIL");
+  }
+
+  const emailLower = email.toLowerCase().trim();
+
+  // Find user by email or by phone if provided
+  let user = await User.findOne({ where: { email: emailLower } });
+
+  if (!user && phone) {
+    user = await User.findOne({ where: { phone } });
+    if (user && !user.email) {
+      user.email = emailLower;
+      await user.save();
+    }
+  }
+
+  let isNewUser = false;
+  if (!user) {
+    // Generate unique fallback phone if phone is required by schema
+    const fallbackPhone = phone || `g_${Date.now().toString().slice(-6)}${Math.floor(1000 + Math.random() * 9000)}`;
+    user = await User.create({
+      email: emailLower,
+      name: name || emailLower.split("@")[0],
+      phone: fallbackPhone,
+      role: "CUSTOMER",
+      is_verified: true,
+      profile_image: photoURL || null,
+    });
+    isNewUser = true;
+
+    // Initialize shopping cart for new customer
+    await Cart.findOrCreate({ where: { user_id: user.id } });
+  } else {
+    // Update profile image if missing
+    if (photoURL && !user.profile_image) {
+      user.profile_image = photoURL;
+      await user.save();
+    }
+  }
+
+  if (user.is_blocked) {
+    throw new AppError("Your account has been suspended.", 403, "ACCOUNT_BLOCKED");
+  }
+
+  const { token, refreshToken } = generateTokens(user);
+  setTokenCookie(res, token);
+
+  res.json({
+    success: true,
+    message: isNewUser ? "Account created and logged in with Google" : "Logged in with Google successfully",
+    data: {
+      user: {
+        id: user.id,
+        name: user.name,
+        phone: user.phone,
+        email: user.email,
+        role: user.role,
+        profile_image: user.profile_image,
+      },
+      token,
+      refreshToken,
+    },
+  });
+});
+
 // Logout
 const logout = asyncHandler(async (req, res) => {
   res.clearCookie("token");
@@ -247,6 +317,7 @@ module.exports = {
   requestOtp,
   verifyOtpAndLogin,
   loginWithPassword,
+  loginWithGoogle,
   register,
   getMe,
   logout,
