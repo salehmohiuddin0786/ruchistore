@@ -21,11 +21,13 @@ router.put("/users/:id/block", adminController.toggleBlockUser);
 
 // Shops
 router.get("/shops", adminController.getShops);
+router.post("/shops", adminController.createShop);
 router.patch("/shops/:id/status", adminController.updateShopStatus);
 router.put("/shops/:id/status", adminController.updateShopStatus);
 
 // Delivery Partners
 router.get("/delivery-partners", adminController.getDeliveryPartners);
+router.post("/delivery-partners", adminController.createDeliveryPartner);
 router.patch("/delivery-partners/:id/status", adminController.updateDeliveryPartnerStatus);
 router.put("/delivery-partners/:id/status", adminController.updateDeliveryPartnerStatus);
 

@@ -146,6 +146,18 @@ const loginWithPassword = asyncHandler(async (req, res) => {
     throw new AppError("Invalid email or password", 401, "INVALID_CREDENTIALS");
   }
 
+  let shopStatus = null;
+  if (user.role === "SHOP_OWNER") {
+    const s = await Shop.findOne({ where: { owner_id: user.id } });
+    shopStatus = s?.status || "PENDING";
+  }
+
+  let deliveryStatus = null;
+  if (user.role === "DELIVERY_PARTNER") {
+    const dp = await DeliveryPartner.findOne({ where: { user_id: user.id } });
+    deliveryStatus = dp?.status || (dp?.is_approved ? "APPROVED" : "PENDING");
+  }
+
   const { token, refreshToken } = generateTokens(user);
   setTokenCookie(res, token);
 
@@ -160,6 +172,8 @@ const loginWithPassword = asyncHandler(async (req, res) => {
         email: user.email,
         role: user.role,
         profile_image: user.profile_image,
+        shopStatus,
+        deliveryStatus,
       },
       token,
       refreshToken,
@@ -330,12 +344,167 @@ const logout = asyncHandler(async (req, res) => {
   });
 });
 
+// Register as Shop Owner (Pending Admin Approval)
+const registerShop = asyncHandler(async (req, res) => {
+  const {
+    ownerName,
+    email,
+    phone,
+    password,
+    shopName,
+    shopAddress,
+    city = "Hyderabad",
+    pincode = "500081",
+  } = req.body;
+
+  if (!ownerName || !phone || !password || !shopName) {
+    throw new AppError("Owner name, phone, password and shop name are required", 400, "MISSING_FIELDS");
+  }
+
+  const cleanPhone = String(phone).replace(/\D/g, "");
+  const existingPhone = await User.findOne({ where: { phone: cleanPhone } });
+  if (existingPhone) {
+    throw new AppError("Phone number is already registered", 400, "PHONE_EXISTS");
+  }
+
+  if (email) {
+    const existingEmail = await User.findOne({ where: { email } });
+    if (existingEmail) {
+      throw new AppError("Email is already registered", 400, "EMAIL_EXISTS");
+    }
+  }
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+  const user = await User.create({
+    name: ownerName,
+    email: email || null,
+    phone: cleanPhone,
+    password: hashedPassword,
+    role: "SHOP_OWNER",
+    is_verified: true,
+  });
+
+  const baseSlug = shopName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  let slug = baseSlug;
+  let counter = 1;
+  while (await Shop.findOne({ where: { slug } })) {
+    slug = `${baseSlug}-${counter++}`;
+  }
+
+  const shop = await Shop.create({
+    owner_id: user.id,
+    name: shopName,
+    slug,
+    phone: cleanPhone,
+    email: email || null,
+    address: shopAddress || "Hyderabad, Telangana",
+    city,
+    pincode,
+    status: "PENDING",
+    is_open: false,
+  });
+
+  const { token, refreshToken } = generateTokens(user);
+  setTokenCookie(res, token);
+
+  res.status(201).json({
+    success: true,
+    message: "Shop registration submitted successfully. Your account is awaiting admin approval.",
+    data: {
+      user: {
+        id: user.id,
+        name: user.name,
+        phone: user.phone,
+        email: user.email,
+        role: user.role,
+        shopStatus: "PENDING",
+      },
+      shop,
+      token,
+      refreshToken,
+    },
+  });
+});
+
+// Register as Delivery Partner (Pending Admin Approval)
+const registerDelivery = asyncHandler(async (req, res) => {
+  const {
+    name,
+    email,
+    phone,
+    password,
+    vehicleType = "BIKE",
+    vehicleNumber,
+    licenseNumber,
+  } = req.body;
+
+  if (!name || !phone || !password) {
+    throw new AppError("Name, phone and password are required", 400, "MISSING_FIELDS");
+  }
+
+  const cleanPhone = String(phone).replace(/\D/g, "");
+  const existingPhone = await User.findOne({ where: { phone: cleanPhone } });
+  if (existingPhone) {
+    throw new AppError("Phone number is already registered", 400, "PHONE_EXISTS");
+  }
+
+  if (email) {
+    const existingEmail = await User.findOne({ where: { email } });
+    if (existingEmail) {
+      throw new AppError("Email is already registered", 400, "EMAIL_EXISTS");
+    }
+  }
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+  const user = await User.create({
+    name,
+    email: email || null,
+    phone: cleanPhone,
+    password: hashedPassword,
+    role: "DELIVERY_PARTNER",
+    is_verified: true,
+  });
+
+  const partner = await DeliveryPartner.create({
+    user_id: user.id,
+    vehicle_type: vehicleType,
+    vehicle_number: vehicleNumber || "TS-09-XX-0000",
+    license_number: licenseNumber || "DL-RUCHI-0000",
+    status: "PENDING",
+    is_approved: false,
+    is_online: false,
+  });
+
+  const { token, refreshToken } = generateTokens(user);
+  setTokenCookie(res, token);
+
+  res.status(201).json({
+    success: true,
+    message: "Delivery partner registration submitted successfully. Your account is awaiting admin approval.",
+    data: {
+      user: {
+        id: user.id,
+        name: user.name,
+        phone: user.phone,
+        email: user.email,
+        role: user.role,
+        deliveryStatus: "PENDING",
+      },
+      partner,
+      token,
+      refreshToken,
+    },
+  });
+});
+
 module.exports = {
   requestOtp,
   verifyOtpAndLogin,
   loginWithPassword,
   loginWithGoogle,
   register,
+  registerShop,
+  registerDelivery,
   getMe,
   logout,
 };

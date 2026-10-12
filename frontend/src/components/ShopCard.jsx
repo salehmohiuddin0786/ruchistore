@@ -5,9 +5,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Star, Zap, MapPin, Store, ArrowRight } from "lucide-react";
+import { isShopOpen } from "../lib/shopUtils";
 
 export default function ShopCard({ shop }) {
-  const isOpen = shop.is_open ?? shop.isOpen ?? true;
+  const isOpen = isShopOpen(shop);
   const coverImage = shop.cover_image || shop.coverImage || shop.bannerImage || shop.logo;
   const eta = shop.estimated_delivery_time || shop.estimatedDeliveryTime || "15-20 min";
   const minOrder = shop.minimum_order ?? shop.minimumOrder ?? 0;

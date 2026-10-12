@@ -9,6 +9,7 @@ import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import apiClient from "../api/apiClient";
 import { useToast } from "../context/ToastContext";
+import { isShopOpen } from "../lib/shopUtils";
 
 export default function ProductCard({ product }) {
   const { cartItems, addToCart, updateQuantity } = useCart();
@@ -53,7 +54,7 @@ export default function ProductCard({ product }) {
     }
   };
 
-  const isShopClosed = Boolean(product.shop && (product.shop.is_open === false || product.shop.isOpen === false));
+  const isShopClosed = product.shop ? !isShopOpen(product.shop) : false;
 
   const handleAdd = (e) => {
     e.preventDefault();

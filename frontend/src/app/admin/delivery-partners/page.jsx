@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Bike, Star, Phone, CheckCircle, ShieldCheck } from "lucide-react";
+import { Bike, Star, Phone, CheckCircle, ShieldCheck, Plus, X } from "lucide-react";
 import apiClient from "../../../api/apiClient";
 import { useToast } from "../../../context/ToastContext";
 
@@ -9,6 +9,20 @@ export default function AdminDeliveryPartnersPage() {
   const { showToast } = useToast();
   const [partners, setPartners] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Add Rider modal
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [addLoading, setAddLoading] = useState(false);
+  const [addForm, setAddForm] = useState({
+    name: "",
+    phone: "",
+    email: "",
+    password: "Admin@123",
+    vehicleType: "BIKE",
+    vehicleNumber: "",
+    licenseNumber: "",
+    status: "APPROVED",
+  });
 
   useEffect(() => {
     loadPartners();
@@ -28,6 +42,38 @@ export default function AdminDeliveryPartnersPage() {
     }
   };
 
+  const handleCreatePartner = async (e) => {
+    e.preventDefault();
+    if (!addForm.name || !addForm.phone) {
+      showToast("Rider name and phone are required", "error");
+      return;
+    }
+
+    try {
+      setAddLoading(true);
+      const res = await apiClient.post("/admin/delivery-partners", addForm);
+      if (res.data?.success) {
+        showToast("Delivery Partner created & approved successfully!", "success");
+        setIsAddOpen(false);
+        setAddForm({
+          name: "",
+          phone: "",
+          email: "",
+          password: "Admin@123",
+          vehicleType: "BIKE",
+          vehicleNumber: "",
+          licenseNumber: "",
+          status: "APPROVED",
+        });
+        loadPartners();
+      }
+    } catch (err) {
+      showToast(err.response?.data?.message || "Failed to create partner", "error");
+    } finally {
+      setAddLoading(false);
+    }
+  };
+
   const handleToggleApproval = async (partnerId, currentStatus) => {
     try {
       const nextApproved = !currentStatus;
@@ -44,10 +90,144 @@ export default function AdminDeliveryPartnersPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-black text-white tracking-tight">Delivery Fleet</h1>
-        <p className="text-xs text-slate-400">Manage on-demand delivery partners and monitor live rider availability</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black text-white tracking-tight">Delivery Fleet</h1>
+          <p className="text-xs text-slate-400">Manage on-demand delivery partners and monitor live rider availability</p>
+        </div>
+        <button
+          onClick={() => setIsAddOpen(true)}
+          className="px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-600/30 transition-all cursor-pointer shrink-0"
+        >
+          <Plus className="w-4 h-4" /> Add Delivery Rider
+        </button>
       </div>
+
+      {/* Add Rider Modal */}
+      {isAddOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-600/20 text-emerald-400 flex items-center justify-center font-bold">
+                  <Bike className="w-5 h-5" />
+                </div>
+                <h3 className="text-base font-black text-white">Add Delivery Partner</h3>
+              </div>
+              <button
+                onClick={() => setIsAddOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreatePartner} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-300 font-bold mb-1">Rider Full Name *</label>
+                <input
+                  type="text"
+                  value={addForm.name}
+                  onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
+                  placeholder="e.g. Ramesh Kumar"
+                  className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white outline-hidden focus:border-emerald-400"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">Mobile (10 digits) *</label>
+                  <input
+                    type="tel"
+                    maxLength={10}
+                    value={addForm.phone}
+                    onChange={(e) => setAddForm({ ...addForm, phone: e.target.value.replace(/\D/g, "") })}
+                    placeholder="9876543210"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white outline-hidden focus:border-emerald-400"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">Email (Optional)</label>
+                  <input
+                    type="email"
+                    value={addForm.email}
+                    onChange={(e) => setAddForm({ ...addForm, email: e.target.value })}
+                    placeholder="rider@store.com"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white outline-hidden focus:border-emerald-400"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">Login Password</label>
+                  <input
+                    type="password"
+                    value={addForm.password}
+                    onChange={(e) => setAddForm({ ...addForm, password: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white outline-hidden focus:border-emerald-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">Vehicle Type</label>
+                  <select
+                    value={addForm.vehicleType}
+                    onChange={(e) => setAddForm({ ...addForm, vehicleType: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white outline-hidden focus:border-emerald-400"
+                  >
+                    <option value="BIKE">Motorcycle / Bike</option>
+                    <option value="SCOOTER">Scooter / Scooty</option>
+                    <option value="ELECTRIC_VEHICLE">Electric Vehicle (EV)</option>
+                    <option value="BICYCLE">Bicycle</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">Vehicle Registration No.</label>
+                  <input
+                    type="text"
+                    value={addForm.vehicleNumber}
+                    onChange={(e) => setAddForm({ ...addForm, vehicleNumber: e.target.value })}
+                    placeholder="TS-09-XX-0000"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white outline-hidden focus:border-emerald-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">Driving License No.</label>
+                  <input
+                    type="text"
+                    value={addForm.licenseNumber}
+                    onChange={(e) => setAddForm({ ...addForm, licenseNumber: e.target.value })}
+                    placeholder="DL-0420110012345"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white outline-hidden focus:border-emerald-400"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 font-bold hover:bg-slate-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={addLoading}
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-all disabled:opacity-50"
+                >
+                  {addLoading ? "Creating..." : "Create & Approve Rider"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">

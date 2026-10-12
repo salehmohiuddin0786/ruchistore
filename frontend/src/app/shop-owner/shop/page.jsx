@@ -31,7 +31,7 @@ export default function ShopOwnerProfilePage() {
       setLoading(true);
       const res = await apiClient.get("/shop-owner/shop");
       if (res.data?.success) {
-        const s = res.data.data;
+        const s = res.data.data?.shop || res.data.data;
         setShop(s);
         setFormData({
           name: s.name || "",
@@ -40,9 +40,9 @@ export default function ShopOwnerProfilePage() {
           city: s.city || "Hyderabad",
           pincode: s.pincode || "500081",
           logo: s.logo || "",
-          bannerImage: s.bannerImage || "",
+          bannerImage: s.bannerImage || s.cover_image || "",
           description: s.description || "",
-          minOrderAmount: s.minOrderAmount?.toString() || "0",
+          minOrderAmount: (s.minOrderAmount ?? s.minimum_order)?.toString() || "0",
         });
       }
     } catch (err) {

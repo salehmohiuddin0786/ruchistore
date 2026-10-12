@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import apiClient from "../../../api/apiClient";
 import ProductCard from "../../../components/ProductCard";
+import { isShopOpen } from "../../../lib/shopUtils";
 
 export default function ShopDetailPage({ params }) {
   const router = useRouter();
@@ -166,11 +167,11 @@ export default function ShopDetailPage({ params }) {
             )}
             <div className="absolute top-4 right-4">
               <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
-                (shop.is_open ?? shop.isOpen ?? true)
+                isShopOpen(shop)
                   ? "bg-emerald-500 text-white shadow-xs"
                   : "bg-red-500 text-white shadow-xs"
               }`}>
-                {(shop.is_open ?? shop.isOpen ?? true) ? "🟢 Open Now" : "🔴 Closed"}
+                {isShopOpen(shop) ? "🟢 Open Now" : "🔴 Closed"}
               </span>
             </div>
           </div>
@@ -228,7 +229,7 @@ export default function ShopDetailPage({ params }) {
 
       {/* Filter and In-Shop Search */}
       {/* Store Closed Banner or Products Filter */}
-      {shop && !(shop.is_open ?? shop.isOpen ?? true) ? (
+      {shop && !isShopOpen(shop) ? (
         <div className="p-8 rounded-3xl bg-amber-50 border border-amber-200 text-center space-y-3">
           <Clock className="w-12 h-12 text-amber-600 mx-auto" />
           <h3 className="text-lg font-black text-amber-950">This Store is Currently Closed</h3>

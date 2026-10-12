@@ -28,6 +28,7 @@ import { useCart } from "../../context/CartContext";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import apiClient from "../../api/apiClient";
+import { isShopOpen } from "../../lib/shopUtils";
 import AuthModal from "../../components/AuthModal";
 import { getCurrentGeoAddress } from "../../lib/geo";
 
@@ -660,18 +661,18 @@ export default function CheckoutPage() {
                 </div>
                 <span
                   className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase shrink-0 ${
-                    shop.is_open ?? shop.isOpen ?? true
+                    isShopOpen(shop)
                       ? "bg-emerald-100 text-emerald-800"
                       : "bg-rose-100 text-rose-800"
                   }`}
                 >
-                  {shop.is_open ?? shop.isOpen ?? true ? "Open" : "Closed"}
+                  {isShopOpen(shop) ? "Open" : "Closed"}
                 </span>
               </div>
             )}
 
             {/* Closed Store Warning */}
-            {shop && !(shop.is_open ?? shop.isOpen ?? true) && (
+            {shop && !isShopOpen(shop) && (
               <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 text-xs space-y-1">
                 <p className="font-bold flex items-center gap-1.5">
                   <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" /> Store is currently closed
@@ -737,13 +738,13 @@ export default function CheckoutPage() {
             {/* Place Order Button */}
             <motion.button
               whileTap={{ scale: 0.98 }}
-              disabled={submitting || (shop && !(shop.is_open ?? shop.isOpen ?? true))}
+              disabled={submitting || (shop && !isShopOpen(shop))}
               onClick={handlePlaceOrder}
               className="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-bold text-sm shadow-lg shadow-emerald-600/20 transition-all cursor-pointer flex items-center justify-center gap-2"
             >
               {submitting ? (
                 <span>Placing your order...</span>
-              ) : shop && !(shop.is_open ?? shop.isOpen ?? true) ? (
+              ) : shop && !isShopOpen(shop) ? (
                 <span>Store Currently Closed</span>
               ) : (
                 <>

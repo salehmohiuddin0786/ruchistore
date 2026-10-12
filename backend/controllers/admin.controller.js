@@ -1,4 +1,5 @@
 const { Op } = require("sequelize");
+const bcrypt = require("bcryptjs");
 const {
   User,
   Shop,
@@ -590,14 +591,137 @@ const resolveSupportTicket = asyncHandler(async (req, res) => {
   });
 });
 
+const createShop = asyncHandler(async (req, res) => {
+  const {
+    ownerName,
+    ownerEmail,
+    ownerPhone,
+    ownerPassword,
+    shopName,
+    shopAddress,
+    city = "Hyderabad",
+    pincode = "500081",
+    commissionPercentage = 10.0,
+    status = "APPROVED",
+  } = req.body;
+
+  if (!shopName || !ownerPhone) {
+    throw new AppError("Shop name and owner phone are required", 400, "MISSING_FIELDS");
+  }
+
+  const cleanPhone = String(ownerPhone).replace(/\D/g, "");
+
+  // Find or create Owner user
+  let owner = await User.findOne({
+    where: { [Op.or]: [{ phone: cleanPhone }, ...(ownerEmail ? [{ email: ownerEmail }] : [])] },
+  });
+
+  if (!owner) {
+    const hashedPassword = await bcrypt.hash(ownerPassword || "Admin@123", 10);
+    owner = await User.create({
+      name: ownerName || shopName,
+      phone: cleanPhone,
+      email: ownerEmail || `owner.${Date.now()}@ruchistore.com`,
+      password: hashedPassword,
+      role: "SHOP_OWNER",
+      is_verified: true,
+    });
+  } else {
+    await owner.update({ role: "SHOP_OWNER" });
+  }
+
+  // Generate unique slug
+  const baseSlug = shopName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  let slug = baseSlug;
+  let counter = 1;
+  while (await Shop.findOne({ where: { slug } })) {
+    slug = `${baseSlug}-${counter++}`;
+  }
+
+  const shop = await Shop.create({
+    owner_id: owner.id,
+    name: shopName,
+    slug,
+    address: shopAddress || "Main Market, Hyderabad",
+    city,
+    pincode,
+    phone: cleanPhone,
+    email: ownerEmail,
+    commission_percentage: commissionPercentage,
+    status: status === "PENDING" ? "PENDING" : "APPROVED",
+    is_open: true,
+  });
+
+  res.status(201).json({
+    success: true,
+    message: "Shop and Owner created successfully",
+    data: { shop, owner },
+  });
+});
+
+const createDeliveryPartner = asyncHandler(async (req, res) => {
+  const {
+    name,
+    email,
+    phone,
+    password,
+    vehicleType = "BIKE",
+    vehicleNumber,
+    licenseNumber,
+    status = "APPROVED",
+  } = req.body;
+
+  if (!name || !phone) {
+    throw new AppError("Rider name and phone are required", 400, "MISSING_FIELDS");
+  }
+
+  const cleanPhone = String(phone).replace(/\D/g, "");
+
+  let riderUser = await User.findOne({
+    where: { [Op.or]: [{ phone: cleanPhone }, ...(email ? [{ email }] : [])] },
+  });
+
+  if (!riderUser) {
+    const hashedPassword = await bcrypt.hash(password || "Admin@123", 10);
+    riderUser = await User.create({
+      name,
+      phone: cleanPhone,
+      email: email || `rider.${Date.now()}@ruchistore.com`,
+      password: hashedPassword,
+      role: "DELIVERY_PARTNER",
+      is_verified: true,
+    });
+  } else {
+    await riderUser.update({ role: "DELIVERY_PARTNER" });
+  }
+
+  const partner = await DeliveryPartner.create({
+    user_id: riderUser.id,
+    vehicle_type: vehicleType,
+    vehicle_number: vehicleNumber || "TS-09-XX-0000",
+    license_number: licenseNumber || "DL-RUCHI-0000",
+    status: status === "PENDING" ? "PENDING" : "APPROVED",
+    is_approved: status !== "PENDING",
+    is_online: true,
+  });
+
+  res.status(201).json({
+    success: true,
+    message: "Delivery partner created successfully",
+    data: { partner, user: riderUser },
+  });
+});
+
 module.exports = {
   getDashboard,
   getOrders,
   getUsers,
   toggleBlockUser,
   getShops,
+  createShop,
   updateShopStatus,
   getDeliveryPartners,
+  createDeliveryPartner,
   updateDeliveryPartnerStatus,
   createCategory,
   updateCategory,

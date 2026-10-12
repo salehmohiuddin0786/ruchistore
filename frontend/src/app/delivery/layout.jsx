@@ -19,10 +19,15 @@ import { useAuth } from "../../context/AuthContext";
 import apiClient from "../../api/apiClient";
 import socket from "../../lib/socket";
 import { useToast } from "../../context/ToastContext";
+import PendingApprovalCard from "../../components/PendingApprovalCard";
 
 export default function DeliveryLayout({ children }) {
   const pathname = usePathname();
   const router = useRouter();
+
+  if (pathname === "/delivery/login") {
+    return <>{children}</>;
+  }
   const { user, isAuthenticated, isDeliveryPartner, loading, login, logout } = useAuth();
   const { showToast } = useToast();
 
@@ -158,6 +163,26 @@ export default function DeliveryLayout({ children }) {
     { href: "/delivery/earnings", label: "Earnings", icon: IndianRupee },
     { href: "/delivery/profile", label: "Rider Profile", icon: User },
   ];
+
+  if (
+    !loading &&
+    isAuthenticated &&
+    isDeliveryPartner &&
+    (partnerProfile?.status === "PENDING" ||
+      partnerProfile?.isApproved === false ||
+      partnerProfile?.is_approved === false ||
+      user?.deliveryStatus === "PENDING")
+  ) {
+    return (
+      <PendingApprovalCard
+        type="DELIVERY_PARTNER"
+        userName={user?.name}
+        entityName="Delivery Partner Fleet"
+        onRefresh={loadDeliveryProfile}
+        onLogout={logout}
+      />
+    );
+  }
 
   if (!loading && (!isAuthenticated || !isDeliveryPartner)) {
     return (

@@ -21,9 +21,14 @@ import { useAuth } from "../../context/AuthContext";
 import apiClient from "../../api/apiClient";
 import socket from "../../lib/socket";
 import { useToast } from "../../context/ToastContext";
+import PendingApprovalCard from "../../components/PendingApprovalCard";
 
 export default function ShopOwnerLayout({ children }) {
   const pathname = usePathname();
+
+  if (pathname === "/shop-owner/login") {
+    return <>{children}</>;
+  }
 
   const {
     user,
@@ -102,7 +107,7 @@ export default function ShopOwnerLayout({ children }) {
         return;
       }
 
-      const shopData = response?.data?.data;
+      const shopData = response?.data?.data?.shop || response?.data?.data;
 
       if (!shopData) {
         console.warn("Shop API returned no shop data.");
@@ -110,7 +115,11 @@ export default function ShopOwnerLayout({ children }) {
       }
 
       setShop(shopData);
-      setIsOpen(Boolean(shopData?.isOpen));
+      const isStoreOpen =
+        shopData?.is_open !== undefined
+          ? Boolean(shopData.is_open)
+          : Boolean(shopData?.isOpen);
+      setIsOpen(isStoreOpen);
 
       /* =====================================================
          SOCKET CONNECTION
@@ -230,6 +239,9 @@ export default function ShopOwnerLayout({ children }) {
 
       if (response?.data?.success) {
         setIsOpen(nextState);
+        setShop((prev) =>
+          prev ? { ...prev, is_open: nextState, isOpen: nextState } : null
+        );
 
         showToast(
           nextState
@@ -284,8 +296,8 @@ export default function ShopOwnerLayout({ children }) {
       icon: Layers,
     },
     {
-      href: "/shop-owner/shop",
-      label: "My Store",
+      href: "/shop-owner/profile",
+      label: "Store Profile",
       icon: Store,
     },
     {
@@ -304,6 +316,27 @@ export default function ShopOwnerLayout({ children }) {
       icon: Settings,
     },
   ];
+
+  /* =========================================================
+     PENDING ADMIN APPROVAL SCREEN
+  ========================================================= */
+
+  if (
+    !loading &&
+    isAuthenticated &&
+    isShopOwner &&
+    (shop?.status === "PENDING" || user?.shopStatus === "PENDING")
+  ) {
+    return (
+      <PendingApprovalCard
+        type="SHOP_OWNER"
+        userName={user?.name}
+        entityName={shop?.name || user?.name + "'s Store"}
+        onRefresh={loadShopInfo}
+        onLogout={logout}
+      />
+    );
+  }
 
   /* =========================================================
      LOGIN SCREEN
