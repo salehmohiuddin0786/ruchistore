@@ -18,6 +18,11 @@ import {
 } from "lucide-react";
 import apiClient from "../../../api/apiClient";
 import { useToast } from "../../../context/ToastContext";
+import {
+  parseInventoryStockFile,
+  exportToExcel,
+  exportToCsv,
+} from "../../../utils/spreadsheetParser";
 
 export default function ShopOwnerInventoryPage() {
   const { showToast } = useToast();
@@ -111,24 +116,41 @@ export default function ShopOwnerInventoryPage() {
   ========================================================= */
 
   const downloadSampleTemplate = () => {
-    const csvContent =
-      "Item Name,Stock Quantity\n" +
-      (products.length > 0
-        ? products
-            .slice(0, 5)
-            .map((p) => `"${(p.name || "").replace(/"/g, '""')}",${p.stock}`)
-            .join("\n")
-        : '"Pedigree Adult Chicken & Vegetables Dry Dog Food",20\n"Modern 100% Whole Wheat Bread",30\n"Dove Daily Shine Shampoo",35\n"Nandini Fresh Thick Curd",40');
+    let templateRows = [["Item Name", "Stock Quantity", "Category", "Price", "SKU"]];
 
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", "stock_update_template.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showToast("Sample Stock Template downloaded!", "info");
+    if (products.length > 0) {
+      products.forEach((p) => {
+        templateRows.push([
+          p.name || "",
+          p.stock || 50,
+          p.category?.name || p.category || "Grocery",
+          p.price || 50,
+          p.sku || "",
+        ]);
+      });
+    } else {
+      templateRows = templateRows.concat([
+        ["Fresh Organic Tomatoes", 100, "Vegetables", 45, "SKU-TOM-100"],
+        ["Shimla Apples", 60, "Fruits", 140, "SKU-APP-100"],
+        ["Amul Taaza Milk", 80, "Dairy", 30, "SKU-MILK-100"],
+        ["Aashirvaad Whole Wheat Atta", 40, "Staples", 260, "SKU-ATTA-100"],
+        ["Lay's Classic Salted Potato Chips", 150, "Snacks", 20, "SKU-LAYS-100"],
+        ["Tata Tea Gold", 75, "Beverages", 160, "SKU-TEA-100"],
+        ["Fortune Sunlite Sunflower Oil", 90, "Staples", 135, "SKU-OIL-100"],
+        ["Dettol Original Liquid Soap", 120, "Personal Care", 99, "SKU-DET-100"],
+        ["Surf Excel Easy Wash Detergent", 65, "Household", 145, "SKU-SURF-100"],
+        ["Cadbury Dairy Milk Silk", 200, "Snacks", 80, "SKU-CAD-100"],
+      ]);
+    }
+
+    try {
+      exportToExcel("ruchi_store_inventory_stock_template.xlsx", "Stock Template", templateRows);
+      showToast("Excel (.xlsx) stock template downloaded!", "success");
+    } catch {
+      const csvStr = templateRows.map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+      exportToCsv("ruchi_store_inventory_stock_template.csv", csvStr);
+      showToast("CSV stock template downloaded!", "info");
+    }
   };
 
   const downloadCurrentStockDetails = () => {
@@ -136,85 +158,53 @@ export default function ShopOwnerInventoryPage() {
       showToast("No products in inventory to download", "error");
       return;
     }
-    const header = "Item Name,Stock Quantity,Category,Price,Status\n";
-    const body = products
-      .map((p) => {
-        const cleanName = (p.name || "").replace(/"/g, '""');
-        const cat = (p.category?.name || p.category || "Grocery").replace(/"/g, '""');
-        const status = p.stock <= 0 ? "Out of Stock" : (p.stock <= (p.threshold || 5) ? "Low Stock" : "In Stock");
-        return `"${cleanName}",${p.stock},"${cat}",${p.price || 0},"${status}"`;
-      })
-      .join("\n");
+    const headers = ["Item Name", "Stock Quantity", "Category", "Price", "Status", "SKU"];
+    const rows = [headers];
 
-    const blob = new Blob([header + body], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `store_inventory_stock_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showToast("Current stock report downloaded!", "success");
+    products.forEach((p) => {
+      const status = p.stock <= 0 ? "Out of Stock" : (p.stock <= (p.threshold || 5) ? "Low Stock" : "In Stock");
+      rows.push([
+        p.name || "",
+        p.stock || 0,
+        p.category?.name || p.category || "Grocery",
+        p.price || 0,
+        status,
+        p.sku || "",
+      ]);
+    });
+
+    try {
+      exportToExcel(`store_inventory_stock_${new Date().toISOString().slice(0, 10)}.xlsx`, "Stock", rows);
+      showToast(`Exported ${products.length} inventory items to Excel (.xlsx)!`, "success");
+    } catch {
+      const csvStr = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+      exportToCsv(`store_inventory_stock_${new Date().toISOString().slice(0, 10)}.csv`, csvStr);
+      showToast(`Exported ${products.length} inventory items to CSV!`, "success");
+    }
   };
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setBulkFile(file);
-    const reader = new FileReader();
-
-    reader.onload = (evt) => {
-      const text = evt.target.result;
-      if (typeof text !== "string") return;
-
-      const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
-      if (lines.length < 2) {
-        showToast("File appears to be empty or has no data rows", "error");
-        return;
+    try {
+      setUploadingBulk(true);
+      const parsed = await parseInventoryStockFile(file);
+      if (!parsed || parsed.length === 0) {
+        showToast("No valid inventory rows found in file", "error");
+        setParsedRows([]);
+      } else {
+        setParsedRows(parsed);
+        showToast(`Successfully parsed all ${parsed.length} items from ${file.name}!`, "success");
       }
-
-      // Parse headers
-      const headers = lines[0]
-        .split(",")
-        .map((h) => h.trim().toLowerCase().replace(/['"]/g, ""));
-
-      let nameIdx = headers.findIndex((h) => h.includes("name") || h.includes("item") || h.includes("product") || h.includes("title"));
-      let stockIdx = headers.findIndex(
-        (h) => h.includes("stock") || h.includes("quantity") || h.includes("qty") || h.includes("count")
-      );
-      const deltaIdx = headers.findIndex((h) => h.includes("delta") || h.includes("change") || h.includes("add"));
-      const skuIdx = headers.findIndex((h) => h.includes("sku"));
-
-      if (nameIdx === -1 && skuIdx !== -1) nameIdx = skuIdx;
-      if (nameIdx === -1) nameIdx = 0;
-      if (stockIdx === -1 && deltaIdx === -1) stockIdx = headers.length > 1 ? 1 : -1;
-
-      const rows = [];
-      for (let i = 1; i < lines.length; i++) {
-        // CSV splitter handling quoted values
-        const cols = lines[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || lines[i].split(",");
-        const cleanCols = cols.map((c) => c.trim().replace(/^"|"$/g, "").replace(/""/g, '"'));
-
-        const name = nameIdx !== -1 && cleanCols[nameIdx] ? cleanCols[nameIdx] : (skuIdx !== -1 ? cleanCols[skuIdx] : cleanCols[0]);
-        const sku = skuIdx !== -1 ? cleanCols[skuIdx] : null;
-        const stock = stockIdx !== -1 && cleanCols[stockIdx] !== undefined ? parseInt(cleanCols[stockIdx], 10) : null;
-        const delta = deltaIdx !== -1 && cleanCols[deltaIdx] !== undefined ? parseInt(cleanCols[deltaIdx], 10) : null;
-
-        if (name) {
-          rows.push({
-            name,
-            sku: sku || undefined,
-            stock: isNaN(stock) ? undefined : stock,
-            quantityDelta: isNaN(delta) ? undefined : delta,
-          });
-        }
-      }
-
-      setParsedRows(rows);
-    };
-
-    reader.readAsText(file);
+    } catch (err) {
+      console.error("Bulk file parse error:", err);
+      showToast(err.message || "Failed to parse inventory file", "error");
+      setParsedRows([]);
+    } finally {
+      setUploadingBulk(false);
+    }
   };
 
   const handleApplyBulkUpload = async () => {
@@ -230,7 +220,7 @@ export default function ShopOwnerInventoryPage() {
       });
 
       if (res.data?.success) {
-        showToast(res.data.message || `Successfully updated stock!`, "success");
+        showToast(res.data.message || `Successfully updated stock for all items!`, "success");
         setShowBulkModal(false);
         setBulkFile(null);
         setParsedRows([]);
@@ -525,15 +515,15 @@ export default function ShopOwnerInventoryPage() {
             >
               <Upload className="w-8 h-8 text-purple-600 mx-auto" />
               <p className="text-xs font-bold text-slate-800">
-                {bulkFile ? bulkFile.name : "Click to select CSV / Excel spreadsheet"}
+                {bulkFile ? bulkFile.name : "Click to select Excel (.xlsx, .xls) or CSV spreadsheet"}
               </p>
               <p className="text-[11px] text-slate-500">
-                Supports .csv files with columns: <strong>Item Name, Stock Quantity</strong> (no SKU required)
+                Supports Excel (.xlsx, .xls) & .csv with columns: <strong>Item Name, Stock Quantity</strong> (Supports 100+ items)
               </p>
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".csv,text/csv,application/vnd.ms-excel"
+                accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
                 onChange={handleFileChange}
                 className="hidden"
               />
@@ -543,31 +533,27 @@ export default function ShopOwnerInventoryPage() {
             {parsedRows.length > 0 && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs font-bold text-slate-700">
-                  <span>Detected {parsedRows.length} items to update:</span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={downloadSampleTemplate}
-                      className="text-purple-600 hover:underline flex items-center gap-1 font-semibold"
-                    >
-                      <Download className="w-3 h-3" /> Template
-                    </button>
-                  </div>
+                  <span className="text-emerald-700 flex items-center gap-1.5 font-bold">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    Detected {parsedRows.length} items ready for stock update:
+                  </span>
                 </div>
 
-                <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100 text-xs">
-                  {parsedRows.slice(0, 10).map((r, idx) => (
-                    <div key={idx} className="p-2.5 flex items-center justify-between">
-                      <div>
-                        <span className="font-bold text-slate-900">{r.name}</span>
+                <div className="max-h-56 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100 text-xs bg-slate-50/50">
+                  {parsedRows.slice(0, 50).map((r, idx) => (
+                    <div key={idx} className="p-2.5 flex items-center justify-between hover:bg-white transition-colors">
+                      <div className="min-w-0 pr-2">
+                        <span className="font-bold text-slate-900 truncate block">{idx + 1}. {r.name}</span>
+                        {r.sku && <span className="text-[10px] text-slate-400 font-mono">{r.sku}</span>}
                       </div>
-                      <div className="font-mono font-bold text-purple-700">
+                      <div className="font-mono font-bold text-purple-700 shrink-0 text-right">
                         {r.stock !== undefined ? `${r.stock} units` : `+${r.quantityDelta} units`}
                       </div>
                     </div>
                   ))}
-                  {parsedRows.length > 10 && (
-                    <div className="p-2 text-center text-[11px] text-slate-400 bg-slate-50 font-medium">
-                      +{parsedRows.length - 10} more items in list...
+                  {parsedRows.length > 50 && (
+                    <div className="p-2.5 text-center text-[11px] text-slate-500 bg-slate-100/70 font-semibold">
+                      +{parsedRows.length - 50} more items included in update...
                     </div>
                   )}
                 </div>
@@ -575,20 +561,20 @@ export default function ShopOwnerInventoryPage() {
             )}
 
             <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={downloadSampleTemplate}
-                  className="text-xs text-purple-600 hover:text-purple-800 font-bold flex items-center gap-1"
+                  className="text-xs text-purple-600 hover:text-purple-800 font-bold flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 transition-colors"
                 >
-                  <Download className="w-3.5 h-3.5" /> Template
+                  <Download className="w-3.5 h-3.5" /> Sample Template
                 </button>
                 <button
                   type="button"
                   onClick={downloadCurrentStockDetails}
-                  className="text-xs text-emerald-700 hover:text-emerald-800 font-bold flex items-center gap-1"
+                  className="text-xs text-emerald-700 hover:text-emerald-800 font-bold flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 transition-colors"
                 >
-                  <Download className="w-3.5 h-3.5" /> Export Stock
+                  <Download className="w-3.5 h-3.5" /> Export All ({products.length})
                 </button>
               </div>
 

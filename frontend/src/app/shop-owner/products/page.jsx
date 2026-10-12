@@ -21,6 +21,11 @@ import {
 } from "lucide-react";
 import apiClient from "../../../api/apiClient";
 import { useToast } from "../../../context/ToastContext";
+import {
+  parseProductsCatalogueFile,
+  exportToExcel,
+  exportToCsv,
+} from "../../../utils/spreadsheetParser";
 
 export default function ShopOwnerProductsPage() {
   const { showToast } = useToast();
@@ -61,7 +66,7 @@ export default function ShopOwnerProductsPage() {
     try {
       setLoading(true);
       const [prodRes, catRes] = await Promise.allSettled([
-        apiClient.get("/shop-owner/products"),
+        apiClient.get("/shop-owner/products?limit=1000"),
         apiClient.get("/categories"),
       ]);
 
@@ -151,23 +156,28 @@ export default function ShopOwnerProductsPage() {
   ========================================================= */
 
   const downloadSampleTemplate = () => {
-    const csvContent =
-      "Name,Category,Price,Discount Price,Stock,Unit,Unit Value,Description,Image URL\n" +
-      '"Fresh Organic Tomatoes","Vegetables",45,38,100,"kg","1","Farm fresh red tomatoes","https://images.unsplash.com/photo-1546470427-e26264be0b11?w=500"\n' +
-      '"Shimla Apples","Fruits",140,120,60,"kg","1","Crisp and sweet mountain apples","https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=500"\n' +
-      '"Amul Taaza Milk","Dairy",30,29,80,"pack","500ml","Pasteurized homogenized toned milk","https://images.unsplash.com/photo-1563636619-e9143da7973b?w=500"\n' +
-      '"Aashirvaad Whole Wheat Atta","Staples",260,240,40,"kg","5","Superior MP wheat chakki atta","https://images.unsplash.com/photo-1509440159596-0249088772ff?w=500"\n' +
-      '"Lay\'s Classic Salted Potato Chips","Snacks",20,18,150,"pack","1","Crispy sliced salted potato wafers","https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=500"';
+    const templateData = [
+      ["Name", "Category", "Price", "Discount Price", "Stock", "Unit", "Unit Value", "Description", "Image URL"],
+      ["Fresh Organic Tomatoes", "Vegetables", 45, 38, 100, "kg", "1", "Farm fresh red tomatoes", "https://images.unsplash.com/photo-1546470427-e26264be0b11?w=500"],
+      ["Shimla Apples", "Fruits", 140, 120, 60, "kg", "1", "Crisp and sweet mountain apples", "https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=500"],
+      ["Amul Taaza Milk", "Dairy", 30, 29, 80, "pack", "500ml", "Pasteurized homogenized toned milk", "https://images.unsplash.com/photo-1563636619-e9143da7973b?w=500"],
+      ["Aashirvaad Whole Wheat Atta", "Staples", 260, 240, 40, "kg", "5", "Superior MP wheat chakki atta", "https://images.unsplash.com/photo-1509440159596-0249088772ff?w=500"],
+      ["Lay's Classic Salted Potato Chips", "Snacks", 20, 18, 150, "pack", "1", "Crispy sliced salted potato wafers", "https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=500"],
+      ["Tata Tea Gold", "Beverages", 160, 145, 75, "pack", "500g", "Exquisite rich tea granules with gently pressed leaves", "https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=500"],
+      ["Fortune Sunlite Sunflower Oil", "Staples", 135, 125, 90, "L", "1", "Refined sunflower cooking oil pouch", "https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=500"],
+      ["Dettol Original Liquid Soap", "Personal Care", 99, 89, 120, "pack", "200ml", "Antibacterial moisturizing hand soap", "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=500"],
+      ["Surf Excel Easy Wash Detergent", "Household", 145, 130, 65, "kg", "1", "Superior fabric detergent powder", "https://images.unsplash.com/photo-1585670210693-e7fdd16b142e?w=500"],
+      ["Cadbury Dairy Milk Silk", "Snacks", 80, 75, 200, "piece", "60g", "Velvety smooth pure milk chocolate bar", "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500"],
+    ];
 
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", "products_catalogue_template.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showToast("Product Catalogue sample template downloaded!", "info");
+    try {
+      exportToExcel("ruchi_store_products_catalogue_template.xlsx", "Catalogue Template", templateData);
+      showToast("Excel (.xlsx) sample catalogue template downloaded!", "success");
+    } catch {
+      const csvStr = templateData.map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+      exportToCsv("ruchi_store_products_catalogue_template.csv", csvStr);
+      showToast("CSV sample catalogue template downloaded!", "info");
+    }
   };
 
   const downloadProductDetails = () => {
@@ -175,106 +185,61 @@ export default function ShopOwnerProductsPage() {
       showToast("No products found to export", "error");
       return;
     }
-    const header = "Name,Category,Price,Discount Price,Stock,Unit,Unit Value,Description,Image URL\n";
-    const body = products
-      .map((p) => {
-        const cleanName = (p.name || "").replace(/"/g, '""');
-        const cat = (p.category?.name || p.category || "Grocery").replace(/"/g, '""');
-        const price = p.price || 0;
-        const discountPrice = p.discount_price || p.discountPrice || "";
-        const stock = p.stock_quantity ?? p.stock ?? 0;
-        const unit = (p.unit || "pack").replace(/"/g, '""');
-        const unitValue = (p.unit_value || p.unitValue || "1").toString().replace(/"/g, '""');
-        const desc = (p.description || "").replace(/"/g, '""');
-        const image = (p.image || "").replace(/"/g, '""');
-        return `"${cleanName}","${cat}",${price},${discountPrice},${stock},"${unit}","${unitValue}","${desc}","${image}"`;
-      })
-      .join("\n");
+    const headers = ["Name", "Category", "Price", "Discount Price", "Stock", "Unit", "Unit Value", "Description", "Image URL", "SKU"];
+    const rows = [headers];
 
-    const blob = new Blob([header + body], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `store_products_catalogue_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showToast("Product details downloaded successfully!", "success");
+    products.forEach((p) => {
+      rows.push([
+        p.name || "",
+        p.category?.name || p.category || "Grocery",
+        p.price || 0,
+        p.discount_price || p.discountPrice || "",
+        p.stock_quantity ?? p.stock ?? 0,
+        p.unit || "pack",
+        p.unit_value || p.unitValue || "1",
+        p.description || "",
+        p.image || "",
+        p.sku || "",
+      ]);
+    });
+
+    try {
+      exportToExcel(`store_catalogue_${new Date().toISOString().slice(0, 10)}.xlsx`, "Catalogue", rows);
+      showToast(`Exported ${products.length} products to Excel (.xlsx)!`, "success");
+    } catch {
+      const csvStr = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+      exportToCsv(`store_catalogue_${new Date().toISOString().slice(0, 10)}.csv`, csvStr);
+      showToast(`Exported ${products.length} products to CSV!`, "success");
+    }
   };
 
-  const handleBulkFileChange = (e) => {
+  const handleBulkFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setBulkFile(file);
-    const reader = new FileReader();
-
-    reader.onload = (evt) => {
-      const text = evt.target.result;
-      if (typeof text !== "string") return;
-
-      const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
-      if (lines.length < 2) {
-        showToast("File has no data rows", "error");
-        return;
+    try {
+      setUploadingBulk(true);
+      const parsed = await parseProductsCatalogueFile(file);
+      if (!parsed || parsed.length === 0) {
+        showToast("No valid products detected. Please verify your column headers.", "error");
+        setParsedProducts([]);
+      } else {
+        setParsedProducts(parsed);
+        showToast(`Successfully parsed all ${parsed.length} products from ${file.name}!`, "success");
       }
-
-      const headers = lines[0]
-        .split(",")
-        .map((h) => h.trim().toLowerCase().replace(/['"]/g, ""));
-
-      const nameIdx = headers.findIndex((h) => h.includes("name") || h.includes("title"));
-      const catIdx = headers.findIndex((h) => h.includes("cat"));
-      const priceIdx = headers.findIndex((h) => h.includes("price") && !h.includes("discount"));
-      const discIdx = headers.findIndex((h) => h.includes("discount") || h.includes("sale"));
-      const stockIdx = headers.findIndex((h) => h.includes("stock") || h.includes("qty"));
-      const unitIdx = headers.findIndex((h) => h.includes("unit") && !h.includes("value"));
-      const valIdx = headers.findIndex((h) => h.includes("unit value") || h.includes("value"));
-      const descIdx = headers.findIndex((h) => h.includes("desc"));
-      const imgIdx = headers.findIndex((h) => h.includes("image") || h.includes("photo") || h.includes("url"));
-      const skuIdx = headers.findIndex((h) => h.includes("sku"));
-
-      const parsed = [];
-      for (let i = 1; i < lines.length; i++) {
-        const cols = lines[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || lines[i].split(",");
-        const cleanCols = cols.map((c) => c.trim().replace(/^"|"$/g, "").replace(/""/g, '"'));
-
-        const name = nameIdx !== -1 ? cleanCols[nameIdx] : cleanCols[0];
-        const category = catIdx !== -1 ? cleanCols[catIdx] : "Grocery";
-        const price = priceIdx !== -1 ? parseFloat(cleanCols[priceIdx]) : 0;
-        const discountPrice = discIdx !== -1 && cleanCols[discIdx] ? parseFloat(cleanCols[discIdx]) : null;
-        const stock = stockIdx !== -1 ? parseInt(cleanCols[stockIdx], 10) : 50;
-        const unit = unitIdx !== -1 ? cleanCols[unitIdx] : "pack";
-        const unitValue = valIdx !== -1 ? cleanCols[valIdx] : "1";
-        const description = descIdx !== -1 ? cleanCols[descIdx] : "";
-        const image = imgIdx !== -1 ? cleanCols[imgIdx] : "";
-        const sku = skuIdx !== -1 ? cleanCols[skuIdx] : null;
-
-        if (name && price > 0) {
-          parsed.push({
-            name,
-            category,
-            price,
-            discountPrice,
-            stock: isNaN(stock) ? 50 : stock,
-            unit,
-            unitValue,
-            description,
-            image,
-            sku,
-          });
-        }
-      }
-
-      setParsedProducts(parsed);
-    };
-
-    reader.readAsText(file);
+    } catch (err) {
+      console.error("Bulk file parse error:", err);
+      showToast(err.message || "Failed to read Excel / CSV file", "error");
+      setParsedProducts([]);
+    } finally {
+      setUploadingBulk(false);
+    }
   };
 
   const handleApplyBulkImport = async () => {
     if (parsedProducts.length === 0) {
-      showToast("No valid products found in CSV", "error");
+      showToast("No valid products found to import", "error");
       return;
     }
 
@@ -285,7 +250,7 @@ export default function ShopOwnerProductsPage() {
       });
 
       if (res.data?.success) {
-        showToast(res.data.message || `Successfully imported products!`, "success");
+        showToast(res.data.message || `Successfully imported all ${parsedProducts.length} products!`, "success");
         setShowBulkModal(false);
         setBulkFile(null);
         setParsedProducts([]);
@@ -500,15 +465,15 @@ export default function ShopOwnerProductsPage() {
             >
               <Upload className="w-8 h-8 text-indigo-600 mx-auto" />
               <p className="text-xs font-bold text-slate-800">
-                {bulkFile ? bulkFile.name : "Click to select CSV / Excel spreadsheet"}
+                {bulkFile ? bulkFile.name : "Click to select Excel (.xlsx, .xls) or CSV spreadsheet"}
               </p>
               <p className="text-[11px] text-slate-500">
-                Required columns: <strong>Name, Category, Price, Stock</strong> (Optional: Discount Price, Unit, Description, Image URL - No SKU required)
+                Required columns: <strong>Name, Category, Price, Stock</strong> (Optional: Discount Price, Unit, Description, Image URL - Supports 100+ items)
               </p>
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".csv,text/csv,application/vnd.ms-excel"
+                accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
                 onChange={handleBulkFileChange}
                 className="hidden"
               />
@@ -518,26 +483,29 @@ export default function ShopOwnerProductsPage() {
             {parsedProducts.length > 0 && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs font-bold text-slate-700">
-                  <span>Detected {parsedProducts.length} products ready to import:</span>
+                  <span className="text-emerald-700 flex items-center gap-1.5 font-bold">
+                    <CheckCircle className="w-4 h-4 text-emerald-600" />
+                    Detected {parsedProducts.length} products ready for import:
+                  </span>
                 </div>
 
-                <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100 text-xs">
-                  {parsedProducts.slice(0, 10).map((p, idx) => (
-                    <div key={idx} className="p-2.5 flex items-center justify-between">
-                      <div>
-                        <span className="font-bold text-slate-900">{p.name}</span>
-                        <span className="text-[10px] text-slate-500 ml-2">
-                          ({p.category} • ₹{p.price})
+                <div className="max-h-56 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100 text-xs bg-slate-50/50">
+                  {parsedProducts.slice(0, 50).map((p, idx) => (
+                    <div key={idx} className="p-2.5 flex items-center justify-between hover:bg-white transition-colors">
+                      <div className="min-w-0 pr-2">
+                        <span className="font-bold text-slate-900 truncate block">{idx + 1}. {p.name}</span>
+                        <span className="text-[10px] text-slate-500">
+                          {p.category} • ₹{p.price} {p.discountPrice ? `(Sale: ₹${p.discountPrice})` : ""}
                         </span>
                       </div>
-                      <div className="font-mono font-bold text-indigo-700">
+                      <div className="font-mono font-bold text-indigo-700 shrink-0 text-right">
                         {p.stock} {p.unit}
                       </div>
                     </div>
                   ))}
-                  {parsedProducts.length > 10 && (
-                    <div className="p-2 text-center text-[11px] text-slate-400 bg-slate-50 font-medium">
-                      +{parsedProducts.length - 10} more items...
+                  {parsedProducts.length > 50 && (
+                    <div className="p-2.5 text-center text-[11px] text-slate-500 bg-slate-100/70 font-semibold">
+                      +{parsedProducts.length - 50} more products included in import...
                     </div>
                   )}
                 </div>
@@ -545,20 +513,20 @@ export default function ShopOwnerProductsPage() {
             )}
 
             <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={downloadSampleTemplate}
-                  className="text-xs text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1"
+                  className="text-xs text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 transition-colors"
                 >
-                  <Download className="w-3.5 h-3.5" /> Template
+                  <Download className="w-3.5 h-3.5" /> Sample Template
                 </button>
                 <button
                   type="button"
                   onClick={downloadProductDetails}
-                  className="text-xs text-emerald-700 hover:text-emerald-800 font-bold flex items-center gap-1"
+                  className="text-xs text-emerald-700 hover:text-emerald-800 font-bold flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 transition-colors"
                 >
-                  <Download className="w-3.5 h-3.5" /> Export Products
+                  <Download className="w-3.5 h-3.5" /> Export All ({products.length})
                 </button>
               </div>
 
@@ -582,7 +550,7 @@ export default function ShopOwnerProductsPage() {
                       Importing...
                     </>
                   ) : (
-                    <>Import Products ({parsedProducts.length})</>
+                    <>Import All ({parsedProducts.length}) Products</>
                   )}
                 </button>
               </div>

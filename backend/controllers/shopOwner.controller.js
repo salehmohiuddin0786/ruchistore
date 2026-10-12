@@ -243,12 +243,13 @@ const getProducts = asyncHandler(async (req, res) => {
     ];
   }
 
-  const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+  const parsedLimit = Math.min(2000, Math.max(1, parseInt(limit, 10) || 50));
+  const offset = (parseInt(page, 10) - 1) * parsedLimit;
 
   const { count, rows: products } = await Product.findAndCountAll({
     where: whereClause,
     include: [{ model: Category, as: "category" }],
-    limit: parseInt(limit, 10),
+    limit: parsedLimit,
     offset,
     order: [["name", "ASC"]],
   });
@@ -259,8 +260,8 @@ const getProducts = asyncHandler(async (req, res) => {
     meta: {
       total: count,
       page: parseInt(page, 10),
-      limit: parseInt(limit, 10),
-      totalPages: Math.ceil(count / limit),
+      limit: parsedLimit,
+      totalPages: Math.ceil(count / parsedLimit),
     },
   });
 });
@@ -475,7 +476,18 @@ const bulkUpdateStock = asyncHandler(async (req, res) => {
     throw new AppError("No items provided for bulk update", 400);
   }
 
+  // Pre-fetch all categories for auto-creation fallback
+  const allCategories = await Category.findAll();
+  const categoryMap = new Map();
+  for (const cat of allCategories) {
+    categoryMap.set(cat.name.toLowerCase().trim(), cat.id);
+    categoryMap.set(String(cat.id), cat.id);
+  }
+  const defaultCategoryId = allCategories.length > 0 ? allCategories[0].id : 1;
+
   let updatedCount = 0;
+  let createdCount = 0;
+
   for (const item of items) {
     let product;
     if (item.id) {
@@ -497,15 +509,71 @@ const bulkUpdateStock = asyncHandler(async (req, res) => {
       product = await Product.findOne({ where: { sku: String(item.sku).trim(), shop_id: shop.id } });
     }
 
-    if (!product) continue;
+    if (!product) {
+      // Auto-create product so that un-catalogued items are NOT dropped!
+      const itemName = String(item.name || item.sku || `Product-${Date.now().toString().slice(-4)}`).trim();
+      let categoryId = defaultCategoryId;
+      if (item.category) {
+        const catKey = String(item.category).toLowerCase().trim();
+        if (categoryMap.has(catKey)) {
+          categoryId = categoryMap.get(catKey);
+        }
+      }
+
+      const parsedPrice = parseFloat(String(item.price || 50).replace(/[^\d.]/g, "")) || 50;
+      let initialStock = 50;
+      if (item.stock !== undefined && item.stock !== null && item.stock !== "") {
+        initialStock = Math.max(0, parseInt(String(item.stock).replace(/[^\d-]/g, ""), 10) || 0);
+      } else if (item.quantityDelta !== undefined && item.quantityDelta !== null && item.quantityDelta !== "") {
+        initialStock = Math.max(0, parseInt(String(item.quantityDelta).replace(/[^\d-]/g, ""), 10) || 0);
+      }
+
+      const slug = `${itemName.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40)}-${shop.id}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+      const sku = item.sku ? String(item.sku).trim() : `SKU-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000)}`;
+
+      const newProduct = await Product.create({
+        shop_id: shop.id,
+        category_id: categoryId,
+        name: itemName,
+        slug,
+        sku,
+        price: parsedPrice,
+        unit: item.unit || "pack",
+        unit_value: item.unitValue || "1",
+        stock_quantity: initialStock,
+        reserved_quantity: 0,
+        low_stock_threshold: 5,
+        is_available: initialStock > 0,
+      });
+
+      await Inventory.create({
+        product_id: newProduct.id,
+        shop_id: shop.id,
+        stock_quantity: initialStock,
+        reserved_quantity: 0,
+        low_stock_threshold: 5,
+      });
+
+      await InventoryTransaction.create({
+        product_id: newProduct.id,
+        shop_id: shop.id,
+        type: "RESTOCKED",
+        quantity: initialStock,
+        balance_after: initialStock,
+        notes: item.notes || "Auto-created from Bulk Stock Excel/CSV upload",
+      });
+
+      createdCount++;
+      continue;
+    }
 
     const prevStock = product.stock_quantity;
     let newStock = prevStock;
 
     if (item.stock !== undefined && item.stock !== null && item.stock !== "") {
-      newStock = Math.max(0, parseInt(item.stock, 10));
+      newStock = Math.max(0, parseInt(String(item.stock).replace(/[^\d-]/g, ""), 10) || 0);
     } else if (item.quantityDelta !== undefined && item.quantityDelta !== null && item.quantityDelta !== "") {
-      newStock = Math.max(0, prevStock + parseInt(item.quantityDelta, 10));
+      newStock = Math.max(0, prevStock + (parseInt(String(item.quantityDelta).replace(/[^\d-]/g, ""), 10) || 0));
     }
 
     const updateFields = {
@@ -537,8 +605,8 @@ const bulkUpdateStock = asyncHandler(async (req, res) => {
 
   res.json({
     success: true,
-    message: `Updated stock for ${updatedCount} items`,
-    data: { updatedCount },
+    message: `Updated stock for ${updatedCount + createdCount} items (${updatedCount} updated, ${createdCount} newly catalogued)`,
+    data: { updatedCount, createdCount, totalProcessed: updatedCount + createdCount },
   });
 });
 
@@ -562,21 +630,22 @@ const bulkImportProducts = asyncHandler(async (req, res) => {
   let updatedCount = 0;
 
   for (const item of items) {
-    const name = (item.name || item.productName || "").trim();
+    const name = String(item.name || item.productName || item.title || item.item || "").trim();
     if (!name) continue;
 
     // Resolve or auto-create category
     let categoryId = null;
-    const catInput = (item.category || item.categoryName || item.categoryId || "Groceries").toString().trim();
+    const catInput = String(item.category || item.categoryName || item.categoryId || "Groceries").trim();
     const catKey = catInput.toLowerCase();
 
     if (categoryMap.has(catKey)) {
       categoryId = categoryMap.get(catKey);
     } else {
-      const slug = catKey.replace(/[^a-z0-9]+/g, "-");
+      const slugBase = catKey.replace(/[^a-z0-9]+/g, "-").slice(0, 40) || "category";
+      const slug = `${slugBase}-${Date.now().toString().slice(-4)}-${Math.floor(Math.random() * 100000)}`;
       const newCat = await Category.create({
         name: catInput,
-        slug: `${slug}-${Date.now().toString().slice(-4)}`,
+        slug,
         is_active: true,
       });
       categoryId = newCat.id;
@@ -584,16 +653,20 @@ const bulkImportProducts = asyncHandler(async (req, res) => {
       categoryMap.set(String(newCat.id), newCat.id);
     }
 
-    const price = parseFloat(item.price || item.mrp || 0);
-    if (!price || isNaN(price)) continue;
+    const priceRaw = String(item.price || item.mrp || item.rate || 50).replace(/[^\d.]/g, "");
+    const price = parseFloat(priceRaw) || 50;
 
-    const discountPrice = item.discountPrice || item.salePrice ? parseFloat(item.discountPrice || item.salePrice) : null;
-    const stock = parseInt(item.stock || item.stockQuantity || item.quantity || 50, 10);
-    const unit = item.unit || "pack";
-    const unitValue = item.unitValue || "1";
-    const description = item.description || "";
+    const discountRaw = item.discountPrice || item.salePrice ? String(item.discountPrice || item.salePrice).replace(/[^\d.]/g, "") : null;
+    const discountPrice = discountRaw ? parseFloat(discountRaw) : null;
+
+    const stockRaw = String(item.stock || item.stockQuantity || item.quantity || 50).replace(/[^\d-]/g, "");
+    const stock = Math.max(0, parseInt(stockRaw, 10) || 50);
+
+    const unit = String(item.unit || "pack").trim();
+    const unitValue = String(item.unitValue || "1").trim();
+    const description = String(item.description || "").trim();
     const image = item.image || item.imageUrl || null;
-    const sku = item.sku || `SKU-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000)}`;
+    const sku = item.sku ? String(item.sku).trim() : `SKU-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000)}`;
 
     let existingProduct = null;
     if (item.id) {
@@ -624,7 +697,8 @@ const bulkImportProducts = asyncHandler(async (req, res) => {
       );
       updatedCount++;
     } else {
-      const slug = `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now().toString().slice(-4)}-${Math.floor(Math.random() * 1000)}`;
+      const slugBase = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40) || "product";
+      const slug = `${slugBase}-${shop.id}-${Date.now().toString().slice(-4)}-${Math.floor(Math.random() * 100000)}`;
       const newProduct = await Product.create({
         shop_id: shop.id,
         category_id: categoryId,
@@ -655,8 +729,8 @@ const bulkImportProducts = asyncHandler(async (req, res) => {
 
   res.json({
     success: true,
-    message: `Import complete: ${importedCount} created, ${updatedCount} updated`,
-    data: { importedCount, updatedCount },
+    message: `Import complete: ${importedCount} created, ${updatedCount} updated (${importedCount + updatedCount} total products)`,
+    data: { importedCount, updatedCount, totalProcessed: importedCount + updatedCount },
   });
 });
 
