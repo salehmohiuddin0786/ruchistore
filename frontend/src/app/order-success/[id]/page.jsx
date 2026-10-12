@@ -98,6 +98,12 @@ export default function OrderSuccessPage({ params }) {
                 </span>
               </div>
             )}
+            {(order.recipientName || order.recipient_name) && (
+              <div className="flex justify-between items-center text-purple-900 bg-purple-100/70 p-2 rounded-xl">
+                <span className="font-bold">🎁 Recipient (Taking Parcel):</span>
+                <span className="font-black">{order.recipientName || order.recipient_name} (📞 +91 {order.recipientPhone || order.recipient_phone})</span>
+              </div>
+            )}
           </div>
         )}
       </motion.div>

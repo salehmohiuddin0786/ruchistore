@@ -18,6 +18,18 @@ module.exports = (sequelize) => {
         type: DataTypes.INTEGER,
         allowNull: false,
       },
+      recipient_name: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      recipient_phone: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      is_for_other: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+      },
       shop_id: {
         type: DataTypes.INTEGER,
         allowNull: false,

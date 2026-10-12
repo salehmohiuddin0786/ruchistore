@@ -185,9 +185,18 @@ export default function ShopOwnerOrdersPage() {
                       <h3 className="text-sm font-black text-slate-900">
                         Order #{order.orderNumber || order.id}
                       </h3>
-                      <p className="text-[11px] text-slate-400">
-                        Customer: {order.user?.name || order.customer?.name || "Customer"} • {new Date(order.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                      </p>
+                      {order.recipientName || order.recipient_name ? (
+                        <p className="text-[11px] text-purple-700 font-bold">
+                          🎁 Deliver To: {order.recipientName || order.recipient_name} (📞 +91 {order.recipientPhone || order.recipient_phone}){" "}
+                          <span className="text-slate-400 font-normal">
+                            • Buyer: {order.user?.name || order.customer?.name || "Customer"} • {new Date(order.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        </p>
+                      ) : (
+                        <p className="text-[11px] text-slate-500 font-medium">
+                          Customer: {order.user?.name || order.customer?.name || "Customer"} {order.user?.phone ? `(📞 +91 ${order.user.phone})` : ""} • {new Date(order.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </p>
+                      )}
                     </div>
                   </div>
 

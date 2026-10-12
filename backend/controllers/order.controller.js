@@ -56,6 +56,9 @@ const formatOrder = (orderInstance) => {
     ...o,
     orderStatus: o.order_status || o.orderStatus,
     orderNumber: o.order_number || o.orderNumber,
+    recipientName: o.recipient_name || o.recipientName || null,
+    recipientPhone: o.recipient_phone || o.recipientPhone || null,
+    isForOther: Boolean(o.is_for_other || o.recipient_name || o.recipientName),
     totalAmount: Number(o.total_amount || o.totalAmount || 0),
     subtotal: Number(o.subtotal || 0),
     deliveryFee: fee,
@@ -85,6 +88,9 @@ const createOrder = asyncHandler(async (req, res) => {
     couponCode,
     paymentMethod = "COD",
     deliveryInstructions,
+    recipientName,
+    recipientPhone,
+    isForOther,
   } = req.body;
 
   // Fallback to active DB Cart if items array is omitted or empty
@@ -212,6 +218,9 @@ const createOrder = asyncHandler(async (req, res) => {
       {
         order_number: orderNumber,
         user_id: req.user.id,
+        recipient_name: recipientName ? String(recipientName).trim() : null,
+        recipient_phone: recipientPhone ? String(recipientPhone).trim() : null,
+        is_for_other: Boolean(isForOther || (recipientName && recipientPhone)),
         shop_id: shop.id,
         address_id: address.id,
         subtotal: pricing.subtotal,

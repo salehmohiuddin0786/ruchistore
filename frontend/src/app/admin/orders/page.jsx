@@ -110,8 +110,20 @@ export default function AdminOrdersPage() {
                     <td className="py-3 px-4 font-semibold text-slate-200">
                       {order.shop?.name || "Ruchi Mart"}
                     </td>
-                    <td className="py-3 px-4 text-slate-400">
-                      {order.user?.name || "Customer"}
+                    <td className="py-3 px-4 text-slate-300">
+                      <div className="font-medium text-slate-200">
+                        {order.recipientName || order.recipient_name || order.user?.name || "Customer"}
+                      </div>
+                      {(order.recipientName || order.recipient_name) ? (
+                        <div className="text-[10px] text-purple-400 font-bold">
+                          🎁 Recipient (by {order.user?.name || "User"})
+                        </div>
+                      ) : null}
+                      {(order.recipientPhone || order.recipient_phone || order.user?.phone) && (
+                        <div className="text-[10px] text-slate-400 font-mono">
+                          📞 +91 {order.recipientPhone || order.recipient_phone || order.user?.phone}
+                        </div>
+                      )}
                     </td>
                     <td className="py-3 px-4 text-emerald-400">
                       {order.deliveryPartner?.user?.name || "Assigning..."}

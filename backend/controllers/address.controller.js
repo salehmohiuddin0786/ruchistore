@@ -31,8 +31,24 @@ const getAddresses = asyncHandler(async (req, res) => {
 // Add new address
 const addAddress = asyncHandler(async (req, res) => {
   const user = await User.findByPk(req.user.id);
-  const name = req.body.name || user?.name || "Customer";
-  const phone = req.body.phone || user?.phone || "9999999999";
+  const name = (req.body.name || user?.name || "Customer").trim();
+  const rawPhone = req.body.phone || (user?.phone && !user.phone.startsWith("g_") ? user.phone : "");
+  const cleanPhone = String(rawPhone).replace(/\D/g, "");
+  const phone = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : (cleanPhone || "9999999999");
+
+  // If user profile is missing a phone, link this valid phone number to user
+  if (user && (!user.phone || user.phone.startsWith("g_")) && phone.length === 10) {
+    try {
+      const existingUserWithPhone = await User.findOne({ where: { phone } });
+      if (!existingUserWithPhone) {
+        user.phone = phone;
+        await user.save();
+      }
+    } catch (e) {
+      // Ignore unique collision
+    }
+  }
+
   const house_flat = req.body.house_flat || req.body.flat || req.body.houseFlat || "Address";
   const address_line = req.body.address_line || req.body.addressLine1 || req.body.addressLine || "";
   const landmark = req.body.landmark || "";

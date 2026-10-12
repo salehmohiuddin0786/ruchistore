@@ -222,7 +222,14 @@ export default function OrderDetailPage({ params }) {
               <MapPin className="w-3.5 h-3.5 text-emerald-600" /> Delivery Address
             </h3>
             {order.deliveryAddress || order.address ? (
-              <div className="text-xs text-slate-700 space-y-1">
+              <div className="text-xs text-slate-700 space-y-1.5">
+                {(order.recipientName || order.recipient_name) && (
+                  <div className="p-2.5 rounded-xl bg-purple-50 border border-purple-100 text-purple-900 font-bold text-xs space-y-0.5 mb-2">
+                    <p className="flex items-center gap-1">🎁 Recipient (Taking Parcel):</p>
+                    <p className="text-purple-950 font-black">{order.recipientName || order.recipient_name}</p>
+                    <p className="text-purple-700 font-mono text-[11px]">📞 +91 {order.recipientPhone || order.recipient_phone}</p>
+                  </div>
+                )}
                 <span className="font-bold text-slate-900 block">{(order.deliveryAddress || order.address).type || "Home"}</span>
                 <p>
                   {(order.deliveryAddress || order.address).flat || (order.deliveryAddress || order.address).house_flat

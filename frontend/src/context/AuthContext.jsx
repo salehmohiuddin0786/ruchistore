@@ -185,6 +185,25 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const updateUser = (updatedData) => {
+    setUser((prev) => {
+      const merged = { ...prev, ...updatedData };
+      localStorage.setItem("user", JSON.stringify(merged));
+      return merged;
+    });
+  };
+
+  const refreshUser = async () => {
+    try {
+      const res = await apiClient.get("/auth/me");
+      if (res.data?.data?.user) {
+        setUser(res.data.data.user);
+        localStorage.setItem("user", JSON.stringify(res.data.data.user));
+        return res.data.data.user;
+      }
+    } catch (e) {}
+  };
+
   const role = user?.role || "GUEST";
   const isAdmin = role === "ADMIN";
   const isShopOwner = role === "SHOP_OWNER";
@@ -208,6 +227,8 @@ export const AuthProvider = ({ children }) => {
         loginWithGoogle,
         register,
         logout,
+        updateUser,
+        refreshUser,
       }}
     >
       {children}

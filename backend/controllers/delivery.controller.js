@@ -584,6 +584,9 @@ const getOrderById = asyncHandler(async (req, res) => {
     data: {
       ...plain,
       orderStatus: plain.order_status,
+      recipientName: plain.recipient_name || plain.recipientName || null,
+      recipientPhone: plain.recipient_phone || plain.recipientPhone || null,
+      isForOther: Boolean(plain.is_for_other || plain.recipient_name),
       customerDeliveryFee: customerFee,
       deliveryFee: customerFee,
       riderPayout,

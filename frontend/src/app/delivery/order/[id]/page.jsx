@@ -118,8 +118,10 @@ export default function DeliveryOrderDetailPage({ params }) {
 
   const currentStatus = order.orderStatus || order.order_status || "ASSIGNED";
   const dropAddress = order.address || order.deliveryAddress;
-  const customerName = order.user?.name || order.customer?.name || "Customer";
-  const customerPhone = order.user?.phone || order.customer?.phone;
+  const isSomeoneElse = Boolean(order.recipientName || order.recipient_name);
+  const recipientName = order.recipientName || order.recipient_name || dropAddress?.name || order.user?.name || order.customer?.name || "Customer";
+  const recipientPhone = order.recipientPhone || order.recipient_phone || dropAddress?.phone || order.user?.phone || order.customer?.phone;
+  const buyerName = order.user?.name || order.customer?.name || "Customer";
   const customerFee = Number(order.customerDeliveryFee !== undefined ? order.customerDeliveryFee : (order.deliveryFee || 0));
   const riderPayout = Number(order.riderPayout !== undefined ? order.riderPayout : (customerFee > 0 ? customerFee : 25));
 
@@ -234,21 +236,35 @@ export default function DeliveryOrderDetailPage({ params }) {
               <MapPin className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Step 2: Customer Delivery
-              </span>
-              <h3 className="text-sm font-black text-slate-900">{customerName}</h3>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Step 2: Customer Delivery
+                </span>
+                {isSomeoneElse && (
+                  <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">
+                    🎁 Ordered for Someone Else
+                  </span>
+                )}
+              </div>
+              <h3 className="text-sm font-black text-slate-900 mt-0.5">
+                {recipientName} {isSomeoneElse ? "(Taking Parcel)" : ""}
+              </h3>
+              {isSomeoneElse && (
+                <p className="text-[11px] text-slate-500 font-medium">
+                  Ordered by: {buyerName}
+                </p>
+              )}
               <p className="text-xs text-slate-600 font-medium">
                 {dropAddress ? `${dropAddress.flat ? dropAddress.flat + ", " : ""}${dropAddress.addressLine1 || ""}, ${dropAddress.city || ""}` : "Delivery Address"}
               </p>
             </div>
           </div>
-          {customerPhone && (
+          {recipientPhone && (
             <a
-              href={`tel:${customerPhone}`}
-              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors"
+              href={`tel:${recipientPhone}`}
+              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors shrink-0"
             >
-              <Phone className="w-3.5 h-3.5" /> Call Customer
+              <Phone className="w-3.5 h-3.5" /> Call {isSomeoneElse ? "Recipient" : "Customer"}
             </a>
           )}
         </div>

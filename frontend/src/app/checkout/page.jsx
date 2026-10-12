@@ -19,12 +19,17 @@ import {
   Briefcase,
   AlertCircle,
   X,
+  Crosshair,
+  Phone,
+  User,
+  Gift,
 } from "lucide-react";
 import { useCart } from "../../context/CartContext";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import apiClient from "../../api/apiClient";
 import AuthModal from "../../components/AuthModal";
+import { getCurrentGeoAddress } from "../../lib/geo";
 
 // Helper to load Razorpay SDK dynamically
 const loadRazorpayScript = () => {
@@ -70,10 +75,18 @@ export default function CheckoutPage() {
   // Auth Modal State
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
+  // Ordering for someone else state
+  const [isOrderingForOther, setIsOrderingForOther] = useState(false);
+  const [recipientName, setRecipientName] = useState("");
+  const [recipientPhone, setRecipientPhone] = useState("");
+
   // Inline Address Modal State
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const [savingAddress, setSavingAddress] = useState(false);
+  const [detectingGps, setDetectingGps] = useState(false);
   const [newAddress, setNewAddress] = useState({
+    name: "",
+    phone: "",
     house_flat: "",
     address_line: "",
     landmark: "",
@@ -82,7 +95,20 @@ export default function CheckoutPage() {
     pincode: "500081",
     type: "HOME",
     is_default: true,
+    latitude: null,
+    longitude: null,
   });
+
+  // Sync default user name/phone into address form when available
+  useEffect(() => {
+    if (user) {
+      setNewAddress((prev) => ({
+        ...prev,
+        name: prev.name || user.name || "",
+        phone: prev.phone || (user.phone && !user.phone.startsWith("g_") ? user.phone : ""),
+      }));
+    }
+  }, [user]);
 
   useEffect(() => {
     if (fetchCart) {
@@ -111,7 +137,7 @@ export default function CheckoutPage() {
           : [];
         setAddresses(addrs);
         const defaultAddr = addrs.find((a) => a.isDefault || a.is_default) || addrs[0];
-        if (defaultAddr) {
+        if (defaultAddr && !selectedAddressId) {
           setSelectedAddressId(defaultAddr.id);
         }
       }
@@ -122,19 +148,56 @@ export default function CheckoutPage() {
     }
   };
 
+  const handleUseCurrentLocation = async () => {
+    try {
+      setDetectingGps(true);
+      showToast("Fetching your current GPS location...", "info");
+      const geo = await getCurrentGeoAddress();
+      setNewAddress((prev) => ({
+        ...prev,
+        address_line: geo.addressLine || prev.address_line,
+        city: geo.city || prev.city,
+        state: geo.state || prev.state,
+        pincode: geo.pincode || prev.pincode,
+        latitude: geo.latitude,
+        longitude: geo.longitude,
+      }));
+      showToast(`Location detected: ${geo.addressLine || geo.city}`, "success");
+    } catch (err) {
+      showToast(err.message || "Failed to detect location", "warning");
+    } finally {
+      setDetectingGps(false);
+    }
+  };
+
   const handleSaveAddress = async (e) => {
     e.preventDefault();
+    if (!newAddress.name?.trim()) {
+      showToast("Please enter recipient name", "error");
+      return;
+    }
+    const cleanPhone = String(newAddress.phone || "").replace(/\D/g, "");
+    if (cleanPhone.length < 10) {
+      showToast("Please enter a valid 10-digit mobile number", "error");
+      return;
+    }
     if (!newAddress.address_line.trim() || !newAddress.pincode.trim()) {
       showToast("Please enter street address and pincode", "error");
       return;
     }
     try {
       setSavingAddress(true);
-      const res = await apiClient.post("/addresses", newAddress);
+      const res = await apiClient.post("/addresses", {
+        ...newAddress,
+        phone: cleanPhone.slice(-10),
+      });
       if (res.data?.success) {
         showToast("Address added successfully!", "success");
         setIsAddressModalOpen(false);
+        const createdId = res.data.data?.id || res.data.address?.id;
         setNewAddress({
+          name: user?.name || "",
+          phone: user?.phone && !user.phone.startsWith("g_") ? user.phone : "",
           house_flat: "",
           address_line: "",
           landmark: "",
@@ -143,9 +206,10 @@ export default function CheckoutPage() {
           pincode: "500081",
           type: "HOME",
           is_default: true,
+          latitude: null,
+          longitude: null,
         });
         await loadAddresses();
-        const createdId = res.data.data?.id || res.data.address?.id;
         if (createdId) {
           setSelectedAddressId(createdId);
         }
@@ -214,6 +278,18 @@ export default function CheckoutPage() {
       return;
     }
 
+    if (isOrderingForOther) {
+      if (!recipientName.trim()) {
+        showToast("Please enter recipient name (person taking the parcel)", "error");
+        return;
+      }
+      const cleanRecPhone = String(recipientPhone || "").replace(/\D/g, "");
+      if (cleanRecPhone.length < 10) {
+        showToast("Please enter a valid 10-digit mobile number for the recipient", "error");
+        return;
+      }
+    }
+
     try {
       setSubmitting(true);
 
@@ -239,6 +315,9 @@ export default function CheckoutPage() {
           couponCode ||
           null,
         deliveryInstructions,
+        recipientName: isOrderingForOther ? recipientName.trim() : null,
+        recipientPhone: isOrderingForOther ? String(recipientPhone).replace(/\D/g, "").slice(-10) : null,
+        isForOther: isOrderingForOther,
       };
 
       const res = await apiClient.post("/orders", payload);
@@ -403,6 +482,18 @@ export default function CheckoutPage() {
                           </span>
                         )}
                       </div>
+
+                      {(addr.name || addr.phone) && (
+                        <p className="text-[11px] font-bold text-slate-800 mb-1 flex items-center gap-2">
+                          <span>{addr.name || "Customer"}</span>
+                          {addr.phone && (
+                            <span className="text-emerald-700 flex items-center gap-0.5">
+                              <Phone className="w-2.5 h-2.5" /> +91 {addr.phone}
+                            </span>
+                          )}
+                        </p>
+                      )}
+
                       <p className="text-xs text-slate-700 line-clamp-2">
                         {addr.flat || addr.house_flat ? `${addr.flat || addr.house_flat}, ` : ""}
                         {addr.addressLine1 || addr.address_line}
@@ -420,8 +511,67 @@ export default function CheckoutPage() {
               </div>
             )}
 
-            {/* Delivery Instructions */}
+            {/* Ordering for someone else toggle & inputs */}
             <div className="pt-2">
+              <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-100 space-y-3">
+                <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={isOrderingForOther}
+                    onChange={(e) => setIsOrderingForOther(e.target.checked)}
+                    className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                  />
+                  <span className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                    <Gift className="w-4 h-4 text-indigo-600" />
+                    Ordering for someone else? (Gift, friend, or family)
+                  </span>
+                </label>
+
+                {isOrderingForOther && (
+                  <div className="space-y-2.5 pt-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                          Recipient's Name (Person Taking Parcel) *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Full Name (e.g. Ayesha Khan)"
+                          value={recipientName}
+                          onChange={(e) => setRecipientName(e.target.value)}
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 outline-hidden focus:border-indigo-500 font-medium"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                          Recipient's Mobile Number *
+                        </label>
+                        <div className="relative flex items-center">
+                          <span className="absolute left-3 text-slate-400 font-semibold select-none">+91</span>
+                          <input
+                            type="tel"
+                            required
+                            placeholder="98765 43210"
+                            value={recipientPhone}
+                            onChange={(e) =>
+                              setRecipientPhone(e.target.value.replace(/\D/g, "").slice(0, 10))
+                            }
+                            className="w-full pl-11 pr-3.5 py-2.5 rounded-xl bg-white border border-slate-200 outline-hidden focus:border-indigo-500 font-medium"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-indigo-800 font-medium bg-white/70 p-2.5 rounded-xl border border-indigo-100">
+                      ℹ️ Our delivery partner will call this mobile number on arrival and verify the handover OTP with this recipient.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Delivery Instructions */}
+            <div className="pt-1">
               <label className="text-xs font-bold text-slate-700 block mb-1">
                 Delivery Instructions (Optional)
               </label>
@@ -430,7 +580,7 @@ export default function CheckoutPage() {
                 placeholder="e.g. Leave with security guard, don't ring bell"
                 value={deliveryInstructions}
                 onChange={(e) => setDeliveryInstructions(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 outline-hidden focus:bg-white focus:border-indigo-500"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 outline-hidden focus:bg-white focus:border-indigo-500 font-medium"
               />
             </div>
           </div>
@@ -583,20 +733,69 @@ export default function CheckoutPage() {
 
       {/* Inline Address Modal */}
       {isAddressModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="text-base font-bold text-slate-900">Add Delivery Address</h3>
-              <button
-                type="button"
-                onClick={() => setIsAddressModalOpen(false)}
-                className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div>
+                <h3 className="text-base font-black text-slate-900">Add Delivery Address</h3>
+                <p className="text-[11px] text-slate-500">Provide accurate address and phone for 10-15m delivery</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleUseCurrentLocation}
+                  disabled={detectingGps}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-bold text-xs transition-colors cursor-pointer"
+                >
+                  <Crosshair className={`w-3.5 h-3.5 ${detectingGps ? "animate-spin" : ""}`} />
+                  {detectingGps ? "Detecting GPS..." : "Use Current Location"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsAddressModalOpen(false)}
+                  className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
-            <form onSubmit={handleSaveAddress} className="space-y-3">
+            <form onSubmit={handleSaveAddress} className="space-y-3.5">
+              {/* Contact Person & Mobile Number */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    Contact / Recipient Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Rahul Sharma"
+                    value={newAddress.name}
+                    onChange={(e) => setNewAddress({ ...newAddress, name: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 font-medium outline-hidden focus:bg-white focus:border-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    Mobile Number *
+                  </label>
+                  <div className="relative flex items-center">
+                    <span className="absolute left-3 text-slate-400 font-semibold select-none text-xs">+91</span>
+                    <input
+                      type="tel"
+                      required
+                      placeholder="98765 43210"
+                      value={newAddress.phone}
+                      onChange={(e) =>
+                        setNewAddress({ ...newAddress, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })
+                      }
+                      className="w-full pl-11 pr-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 font-medium outline-hidden focus:bg-white focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label className="text-xs font-semibold text-slate-700 block mb-1">
                   Flat / House / Building No.
@@ -606,7 +805,7 @@ export default function CheckoutPage() {
                   placeholder="e.g. Flat 402, Cyber Heights"
                   value={newAddress.house_flat}
                   onChange={(e) => setNewAddress({ ...newAddress, house_flat: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 outline-hidden focus:bg-white focus:border-emerald-500"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 font-medium outline-hidden focus:bg-white focus:border-emerald-500"
                 />
               </div>
 
@@ -620,7 +819,7 @@ export default function CheckoutPage() {
                   placeholder="e.g. Road No. 36, Jubilee Hills"
                   value={newAddress.address_line}
                   onChange={(e) => setNewAddress({ ...newAddress, address_line: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 outline-hidden focus:bg-white focus:border-emerald-500"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 font-medium outline-hidden focus:bg-white focus:border-emerald-500"
                 />
               </div>
 
@@ -633,7 +832,7 @@ export default function CheckoutPage() {
                   placeholder="e.g. Near Metro Station / Pillar 12"
                   value={newAddress.landmark}
                   onChange={(e) => setNewAddress({ ...newAddress, landmark: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 outline-hidden focus:bg-white focus:border-emerald-500"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 font-medium outline-hidden focus:bg-white focus:border-emerald-500"
                 />
               </div>
 
@@ -644,7 +843,7 @@ export default function CheckoutPage() {
                     type="text"
                     value={newAddress.city}
                     onChange={(e) => setNewAddress({ ...newAddress, city: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 outline-hidden focus:bg-white focus:border-emerald-500"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 font-medium outline-hidden focus:bg-white focus:border-emerald-500"
                   />
                 </div>
                 <div>
@@ -654,7 +853,7 @@ export default function CheckoutPage() {
                     required
                     value={newAddress.pincode}
                     onChange={(e) => setNewAddress({ ...newAddress, pincode: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 outline-hidden focus:bg-white focus:border-emerald-500"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 font-medium outline-hidden focus:bg-white focus:border-emerald-500"
                   />
                 </div>
               </div>

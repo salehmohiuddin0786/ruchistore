@@ -14,7 +14,7 @@ const getProfile = asyncHandler(async (req, res) => {
 });
 
 const updateProfile = asyncHandler(async (req, res) => {
-  const { name, email } = req.body;
+  const { name, email, phone } = req.body;
   const user = await User.findByPk(req.user.id);
 
   if (email && email !== user.email) {
@@ -23,6 +23,18 @@ const updateProfile = asyncHandler(async (req, res) => {
       throw new AppError("Email is already in use by another account", 400, "EMAIL_EXISTS");
     }
     user.email = email;
+  }
+
+  if (phone) {
+    const cleanPhone = String(phone).replace(/\D/g, "");
+    if (cleanPhone.length < 10) {
+      throw new AppError("Please enter a valid 10-digit mobile number", 400, "INVALID_PHONE");
+    }
+    const existing = await User.findOne({ where: { phone: cleanPhone } });
+    if (existing && existing.id !== user.id) {
+      throw new AppError("Mobile number is already in use by another account", 400, "PHONE_EXISTS");
+    }
+    user.phone = cleanPhone;
   }
 
   if (name) user.name = name;

@@ -106,6 +106,18 @@ const loginWithPassword = asyncHandler(async (req, res) => {
 
   const rawInput = String(email).trim().toLowerCase();
   const searchVariants = [rawInput];
+
+  // Demo role alias mappings
+  if (rawInput === "admin@store" || rawInput === "admin@store.com" || rawInput === "admin") {
+    searchVariants.push("admin@store", "admin@ruchistore.com", "admin@store.com");
+  } else if (rawInput === "owner@store" || rawInput === "owner@store.com" || rawInput === "owner") {
+    searchVariants.push("owner@store", "owner.ruchimart@ruchistore.com", "owner@ruchistore.com");
+  } else if (rawInput === "delivery@store" || rawInput === "delivery@store.com" || rawInput === "delivery") {
+    searchVariants.push("delivery@store", "delivery1@ruchistore.com", "delivery@ruchistore.com");
+  } else if (rawInput === "customer@store" || rawInput === "customer@store.com" || rawInput === "customer") {
+    searchVariants.push("customer@store", "customer@ruchistore.com");
+  }
+
   if (!rawInput.includes(".")) {
     searchVariants.push(`${rawInput}.com`);
   } else if (rawInput.endsWith(".com")) {
@@ -257,12 +269,10 @@ const loginWithGoogle = asyncHandler(async (req, res) => {
 
   let isNewUser = false;
   if (!user) {
-    // Generate unique fallback phone if phone is required by schema
-    const fallbackPhone = phone || `g_${Date.now().toString().slice(-6)}${Math.floor(1000 + Math.random() * 9000)}`;
     user = await User.create({
       email: emailLower,
       name: name || emailLower.split("@")[0],
-      phone: fallbackPhone,
+      phone: phone || null,
       role: "CUSTOMER",
       is_verified: true,
       profile_image: photoURL || null,
@@ -272,6 +282,11 @@ const loginWithGoogle = asyncHandler(async (req, res) => {
     // Initialize shopping cart for new customer
     await Cart.findOrCreate({ where: { user_id: user.id } });
   } else {
+    // Clean up any legacy placeholder phone
+    if (user.phone && user.phone.startsWith("g_")) {
+      user.phone = null;
+      await user.save();
+    }
     // Update profile image if missing
     if (photoURL && !user.profile_image) {
       user.profile_image = photoURL;
@@ -283,6 +298,7 @@ const loginWithGoogle = asyncHandler(async (req, res) => {
     throw new AppError("Your account has been suspended.", 403, "ACCOUNT_BLOCKED");
   }
 
+  const needsPhone = !user.phone || user.phone.startsWith("g_");
   const { token, refreshToken } = generateTokens(user);
   setTokenCookie(res, token);
 
@@ -293,13 +309,14 @@ const loginWithGoogle = asyncHandler(async (req, res) => {
       user: {
         id: user.id,
         name: user.name,
-        phone: user.phone,
+        phone: user.phone || "",
         email: user.email,
         role: user.role,
         profile_image: user.profile_image,
       },
       token,
       refreshToken,
+      needsPhone,
     },
   });
 });

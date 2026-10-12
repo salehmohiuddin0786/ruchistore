@@ -16,6 +16,7 @@ import {
 import { useAuth } from "../context/AuthContext";
 import apiClient from "../api/apiClient";
 import { useToast } from "../context/ToastContext";
+import { getCurrentGeoAddress } from "../lib/geo";
 
 const POPULAR_LOCALITIES = [
   { name: "Madhapur", city: "Hyderabad", pincode: "500081", lat: 17.4485, lng: 78.3908 },
@@ -83,28 +84,21 @@ export default function LocationSelector({ isOpen, onClose, onSelectLocation }) 
     if (onClose) onClose();
   };
 
-  const handleDetectGPS = () => {
-    if (!navigator.geolocation) {
-      showToast("Geolocation is not supported by your browser", "error");
-      return;
+  const handleDetectGPS = async () => {
+    try {
+      showToast("Detecting your exact GPS location...", "info");
+      const geo = await getCurrentGeoAddress();
+      const detected = {
+        name: geo.addressLine || "Current Location",
+        city: geo.city,
+        pincode: geo.pincode,
+        lat: geo.latitude,
+        lng: geo.longitude,
+      };
+      handleSelect(detected);
+    } catch (err) {
+      showToast(err.message || "Unable to detect location. Please select from list.", "warning");
     }
-    showToast("Detecting your location...", "info");
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const detected = {
-          name: "Current Location",
-          city: "Hyderabad",
-          pincode: "500081",
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-        };
-        handleSelect(detected);
-      },
-      (err) => {
-        showToast("Unable to detect location. Please pick from list.", "warning");
-      },
-      { timeout: 10000, enableHighAccuracy: true }
-    );
   };
 
   if (!isOpen) return null;

@@ -9,6 +9,7 @@ import ReplaceCartModal from "./ReplaceCartModal";
 import AuthModal from "./AuthModal";
 import Footer from "./Footer";
 import LocationSelector from "./LocationSelector";
+import CompleteProfileModal from "./CompleteProfileModal";
 
 export default function AppShell({ children }) {
   const pathname = usePathname();
@@ -53,6 +54,7 @@ export default function AppShell({ children }) {
         isOpen={locationOpen}
         onClose={() => setLocationOpen(false)}
       />
+      <CompleteProfileModal />
 
       {/* Mobile Bottom Navigation */}
       <MobileBottomNav onOpenAuth={() => setAuthOpen(true)} />
