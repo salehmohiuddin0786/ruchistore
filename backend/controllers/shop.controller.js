@@ -100,10 +100,15 @@ const getShopById = asyncHandler(async (req, res) => {
     throw new AppError("Shop not found or not approved", 404, "SHOP_NOT_FOUND");
   }
 
+  const plainShop = shop.toJSON ? shop.toJSON() : { ...shop };
+  if (!plainShop.is_open) {
+    plainShop.products = [];
+  }
+
   // Extract unique categories available in this shop
   const categoriesMap = new Map();
-  if (shop.products) {
-    shop.products.forEach((p) => {
+  if (plainShop.products) {
+    plainShop.products.forEach((p) => {
       if (p.category) {
         categoriesMap.set(p.category.id, p.category);
       }
@@ -113,7 +118,7 @@ const getShopById = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     data: {
-      shop,
+      shop: plainShop,
       categories: Array.from(categoriesMap.values()),
     },
   });

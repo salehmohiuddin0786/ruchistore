@@ -73,7 +73,7 @@ const getProducts = asyncHandler(async (req, res) => {
         model: Shop,
         as: "shop",
         attributes: ["id", "name", "slug", "rating", "estimated_delivery_time", "is_open"],
-        where: { status: "APPROVED" },
+        where: { status: "APPROVED", is_open: true },
       },
       {
         model: Category,

@@ -650,12 +650,35 @@ export default function CheckoutPage() {
 
             {/* Shop info */}
             {shop && (
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center gap-2.5">
-                <Store className="w-4 h-4 text-indigo-600 shrink-0" />
-                <div className="text-xs truncate">
-                  <span className="font-bold text-slate-800 block truncate">{shop.name}</span>
-                  <span className="text-slate-400">⚡ 10-15 mins delivery</span>
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between gap-2.5">
+                <div className="flex items-center gap-2.5 truncate">
+                  <Store className="w-4 h-4 text-indigo-600 shrink-0" />
+                  <div className="text-xs truncate">
+                    <span className="font-bold text-slate-800 block truncate">{shop.name}</span>
+                    <span className="text-slate-400">⚡ 10-15 mins delivery</span>
+                  </div>
                 </div>
+                <span
+                  className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase shrink-0 ${
+                    shop.is_open ?? shop.isOpen ?? true
+                      ? "bg-emerald-100 text-emerald-800"
+                      : "bg-rose-100 text-rose-800"
+                  }`}
+                >
+                  {shop.is_open ?? shop.isOpen ?? true ? "Open" : "Closed"}
+                </span>
+              </div>
+            )}
+
+            {/* Closed Store Warning */}
+            {shop && !(shop.is_open ?? shop.isOpen ?? true) && (
+              <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 text-xs space-y-1">
+                <p className="font-bold flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" /> Store is currently closed
+                </p>
+                <p className="text-[11px] text-rose-700">
+                  {shop.name} is not accepting orders right now. Please explore items from open partner stores.
+                </p>
               </div>
             )}
 
@@ -714,12 +737,14 @@ export default function CheckoutPage() {
             {/* Place Order Button */}
             <motion.button
               whileTap={{ scale: 0.98 }}
-              disabled={submitting}
+              disabled={submitting || (shop && !(shop.is_open ?? shop.isOpen ?? true))}
               onClick={handlePlaceOrder}
               className="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-bold text-sm shadow-lg shadow-emerald-600/20 transition-all cursor-pointer flex items-center justify-center gap-2"
             >
               {submitting ? (
                 <span>Placing your order...</span>
+              ) : shop && !(shop.is_open ?? shop.isOpen ?? true) ? (
+                <span>Store Currently Closed</span>
               ) : (
                 <>
                   <span>Place Order • ₹{cartTotal}</span>

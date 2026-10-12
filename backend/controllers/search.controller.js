@@ -45,8 +45,8 @@ const searchAll = asyncHandler(async (req, res) => {
       {
         model: Shop,
         as: "shop",
-        attributes: ["id", "name", "slug", "estimated_delivery_time"],
-        where: { status: "APPROVED" },
+        attributes: ["id", "name", "slug", "estimated_delivery_time", "is_open"],
+        where: { status: "APPROVED", is_open: true },
       },
       {
         model: Category,

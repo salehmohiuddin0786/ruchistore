@@ -53,9 +53,15 @@ export default function ProductCard({ product }) {
     }
   };
 
+  const isShopClosed = Boolean(product.shop && (product.shop.is_open === false || product.shop.isOpen === false));
+
   const handleAdd = (e) => {
     e.preventDefault();
     e.stopPropagation();
+    if (isShopClosed) {
+      showToast("This store is currently closed and not accepting orders", "warning");
+      return;
+    }
     addToCart(product, 1);
   };
 
@@ -147,7 +153,11 @@ export default function ProductCard({ product }) {
         </div>
 
         {/* Quantity or Add Button */}
-        {quantityInCart > 0 ? (
+        {isShopClosed ? (
+          <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-500 font-bold text-[11px] uppercase tracking-wider select-none">
+            Store Closed
+          </span>
+        ) : quantityInCart > 0 ? (
           <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 p-0.5 rounded-xl">
             <button
               onClick={handleDecrement}

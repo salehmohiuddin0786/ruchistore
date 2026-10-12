@@ -227,74 +227,95 @@ export default function ShopDetailPage({ params }) {
       )}
 
       {/* Filter and In-Shop Search */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-        {/* Category Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
-          <button
-            onClick={() => setSelectedCategory("all")}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-colors cursor-pointer ${
-              selectedCategory === "all"
-                ? "bg-emerald-600 text-white shadow-xs"
-                : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-            }`}
-          >
-            All Products ({products.length})
-          </button>
-          {shopCategories.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => setSelectedCategory(c.id)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-colors cursor-pointer ${
-                selectedCategory === c.id
-                  ? "bg-emerald-600 text-white shadow-xs"
-                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-              }`}
+      {/* Store Closed Banner or Products Filter */}
+      {shop && !(shop.is_open ?? shop.isOpen ?? true) ? (
+        <div className="p-8 rounded-3xl bg-amber-50 border border-amber-200 text-center space-y-3">
+          <Clock className="w-12 h-12 text-amber-600 mx-auto" />
+          <h3 className="text-lg font-black text-amber-950">This Store is Currently Closed</h3>
+          <p className="text-xs text-amber-800 max-w-md mx-auto leading-relaxed">
+            <strong>{shop.name}</strong> is currently not accepting new orders. Product catalogue is paused until the store re-opens. Please check back during opening hours or explore other active partner stores nearby!
+          </p>
+          <div className="pt-2">
+            <Link
+              href="/shops"
+              className="inline-block px-5 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-xs shadow-xs hover:bg-emerald-700"
             >
-              {c.name}
-            </button>
-          ))}
-        </div>
-
-        {/* Search within store */}
-        <div className="relative w-full md:w-72">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Search items in this store..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-100 text-xs text-slate-900 border border-slate-200 outline-hidden focus:bg-white focus:border-emerald-500"
-          />
-        </div>
-      </div>
-
-      {/* Products Grid */}
-      {loading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          {Array.from({ length: 10 }).map((_, i) => (
-            <div key={i} className="h-64 rounded-3xl bg-slate-200/60 animate-pulse" />
-          ))}
-        </div>
-      ) : filteredProducts.length === 0 ? (
-        <div className="text-center py-16 bg-white rounded-3xl border border-slate-200 p-8 space-y-3">
-          <Package className="w-12 h-12 text-slate-300 mx-auto" />
-          <p className="text-sm font-bold text-slate-700">No items match your filter in this store</p>
-          <button
-            onClick={() => {
-              setSearch("");
-              setSelectedCategory("all");
-            }}
-            className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold"
-          >
-            Clear Filters
-          </button>
+              Browse Open Partner Stores
+            </Link>
+          </div>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          {filteredProducts.map((p) => (
-            <ProductCard key={p.id} product={p} />
-          ))}
-        </div>
+        <>
+          <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+            {/* Category Pills */}
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+              <button
+                onClick={() => setSelectedCategory("all")}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-colors cursor-pointer ${
+                  selectedCategory === "all"
+                    ? "bg-emerald-600 text-white shadow-xs"
+                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                }`}
+              >
+                All Products ({products.length})
+              </button>
+              {shopCategories.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => setSelectedCategory(c.id)}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-colors cursor-pointer ${
+                    selectedCategory === c.id
+                      ? "bg-emerald-600 text-white shadow-xs"
+                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                  }`}
+                >
+                  {c.name}
+                </button>
+              ))}
+            </div>
+
+            {/* Search within store */}
+            <div className="relative w-full md:w-72">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search items in this store..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-100 text-xs text-slate-900 border border-slate-200 outline-hidden focus:bg-white focus:border-emerald-500"
+              />
+            </div>
+          </div>
+
+          {/* Products Grid */}
+          {loading ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {Array.from({ length: 10 }).map((_, i) => (
+                <div key={i} className="h-64 rounded-3xl bg-slate-200/60 animate-pulse" />
+              ))}
+            </div>
+          ) : filteredProducts.length === 0 ? (
+            <div className="text-center py-16 bg-white rounded-3xl border border-slate-200 p-8 space-y-3">
+              <Package className="w-12 h-12 text-slate-300 mx-auto" />
+              <p className="text-sm font-bold text-slate-700">No items match your filter in this store</p>
+              <button
+                onClick={() => {
+                  setSearch("");
+                  setSelectedCategory("all");
+                }}
+                className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold"
+              >
+                Clear Filters
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {filteredProducts.map((p) => (
+                <ProductCard key={p.id} product={p} />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
