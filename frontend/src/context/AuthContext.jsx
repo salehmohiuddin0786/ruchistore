@@ -148,10 +148,10 @@ export const AuthProvider = ({ children }) => {
   };
 
   // Sign in with Facebook (Official Facebook JavaScript SDK - No Firebase)
-  const loginWithFacebook = async () => {
+  const loginWithFacebook = async (customAppId = null) => {
     try {
       const { loginWithFacebookSdk } = await import("../lib/facebook");
-      const fbProfile = await loginWithFacebookSdk();
+      const fbProfile = await loginWithFacebookSdk(customAppId);
 
       const res = await apiClient.post("/auth/facebook", fbProfile);
       const { user: userData, token } = res.data.data;
@@ -163,12 +163,47 @@ export const AuthProvider = ({ children }) => {
 
       return { success: true, user: userData };
     } catch (error) {
+      if (
+        error?.code === "FACEBOOK_APP_ID_MISSING" ||
+        error?.message === "FACEBOOK_APP_ID_MISSING" ||
+        error?.message?.includes("Facebook App ID is not configured")
+      ) {
+        return {
+          success: false,
+          code: "FACEBOOK_APP_ID_MISSING",
+          message:
+            "Facebook App ID is not configured. Please enter your Meta App ID or use Demo Mode.",
+        };
+      }
       console.error("Facebook login error:", error);
       const message =
         error.response?.data?.message ||
         error.message ||
         "Failed to sign in with Facebook";
       return { success: false, message };
+    }
+  };
+
+  // Demo / Local Test Facebook Login (when Meta App ID is not yet created)
+  const loginWithFacebookDemo = async (customName = "Facebook User") => {
+    try {
+      const { loginWithFacebookDemo: getDemoProfile } = await import("../lib/facebook");
+      const fbProfile = await getDemoProfile(customName);
+
+      const res = await apiClient.post("/auth/facebook", fbProfile);
+      const { user: userData, token } = res.data.data;
+
+      localStorage.setItem("token", token);
+      localStorage.setItem("user", JSON.stringify(userData));
+      setUser(userData);
+      getSocket();
+
+      return { success: true, user: userData };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.response?.data?.message || error.message || "Failed to sign in with Facebook demo",
+      };
     }
   };
 
@@ -228,6 +263,7 @@ export const AuthProvider = ({ children }) => {
         loginWithOtp,
         loginWithGoogle,
         loginWithFacebook,
+        loginWithFacebookDemo,
         register,
         logout,
         updateUser,

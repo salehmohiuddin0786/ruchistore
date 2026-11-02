@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Phone, Mail, Lock, User, ArrowRight, ShieldCheck, ShoppingBag, Store, Bike, Sparkles } from "lucide-react";
@@ -9,7 +9,7 @@ import { useToast } from "../context/ToastContext";
 
 export default function AuthModal({ isOpen, onClose }) {
   const router = useRouter();
-  const { login, loginWithOtp, loginWithGoogle, loginWithFacebook, requestOtp, register } = useAuth();
+  const { login, loginWithOtp, loginWithGoogle, loginWithFacebook, loginWithFacebookDemo, requestOtp, register } = useAuth();
   const { showToast } = useToast();
 
   const [activeTab, setActiveTab] = useState("otp"); // "otp" | "password" | "register"
@@ -19,6 +19,15 @@ export default function AuthModal({ isOpen, onClose }) {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [facebookLoading, setFacebookLoading] = useState(false);
+  const [showFbSetup, setShowFbSetup] = useState(false);
+  const [customFbAppId, setCustomFbAppId] = useState("");
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && isOpen) {
+      const saved = localStorage.getItem("ruchi_facebook_app_id") || "";
+      if (saved) setCustomFbAppId(saved);
+    }
+  }, [isOpen]);
 
   // Email / Password Form State
   const [email, setEmail] = useState("");
@@ -117,12 +126,49 @@ export default function AuthModal({ isOpen, onClose }) {
   };
 
   // Handle Facebook Sign In
-  const handleFacebookSignIn = async () => {
+  const handleFacebookSignIn = async (overrideAppId = null) => {
+    const currentId =
+      overrideAppId ||
+      customFbAppId.trim() ||
+      (typeof window !== "undefined" ? localStorage.getItem("ruchi_facebook_app_id") : "") ||
+      process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
+
+    if (!currentId || currentId.trim() === "" || currentId === "{your-app-id}") {
+      setShowFbSetup(true);
+      showToast("Meta App ID needed for Facebook SDK. Choose 1-Click Test or enter App ID below.", "info");
+      return;
+    }
+
     setFacebookLoading(true);
-    const res = await loginWithFacebook();
+    const res = await loginWithFacebook(currentId);
     setFacebookLoading(false);
     if (res.success) {
       showToast(`Welcome to Ruchi Store, ${res.user.name}!`);
+      setShowFbSetup(false);
+      onClose();
+      if (res.user.role === "ADMIN") {
+        router.push("/admin/dashboard");
+      } else if (res.user.role === "SHOP_OWNER") {
+        router.push("/shop-owner/dashboard");
+      } else if (res.user.role === "DELIVERY_PARTNER") {
+        router.push("/delivery/dashboard");
+      }
+    } else {
+      if (res.code === "FACEBOOK_APP_ID_MISSING") {
+        setShowFbSetup(true);
+      }
+      showToast(res.message, "error");
+    }
+  };
+
+  // Handle Facebook Demo / Instant Test Login (No Meta developer account needed)
+  const handleFacebookDemoSignIn = async (customName = "Facebook Customer") => {
+    setFacebookLoading(true);
+    const res = await loginWithFacebookDemo(customName);
+    setFacebookLoading(false);
+    if (res.success) {
+      showToast(`Welcome to Ruchi Store, ${res.user.name}! (Facebook Mode)`);
+      setShowFbSetup(false);
       onClose();
       if (res.user.role === "ADMIN") {
         router.push("/admin/dashboard");
@@ -134,6 +180,21 @@ export default function AuthModal({ isOpen, onClose }) {
     } else {
       showToast(res.message, "error");
     }
+  };
+
+  // Save Meta App ID & Connect
+  const handleSaveFbAppIdAndConnect = async (e) => {
+    e.preventDefault();
+    if (!customFbAppId || !customFbAppId.trim()) {
+      showToast("Please enter a valid Meta App ID", "error");
+      return;
+    }
+    const cleanId = customFbAppId.trim();
+    if (typeof window !== "undefined") {
+      localStorage.setItem("ruchi_facebook_app_id", cleanId);
+    }
+    showToast("Facebook App ID saved! Connecting to Facebook...", "info");
+    await handleFacebookSignIn(cleanId);
   };
 
   // Handle Register
@@ -535,7 +596,7 @@ export default function AuthModal({ isOpen, onClose }) {
 
             <button
               type="button"
-              onClick={handleFacebookSignIn}
+              onClick={() => handleFacebookSignIn()}
               disabled={facebookLoading || googleLoading || loading}
               className="w-full py-2.5 px-4 rounded-2xl bg-[#1877F2] hover:bg-[#166fe5] text-white font-bold text-xs shadow-2xs hover:shadow-xs transition-all flex items-center justify-center gap-3 cursor-pointer disabled:opacity-60"
             >
@@ -556,6 +617,90 @@ export default function AuthModal({ isOpen, onClose }) {
                 </>
               )}
             </button>
+
+            {/* Quick Facebook helpers & demo buttons */}
+            <div className="flex items-center justify-between px-1 pt-0.5">
+              <button
+                type="button"
+                onClick={() => setShowFbSetup((prev) => !prev)}
+                className="text-[11px] text-blue-600 hover:text-blue-800 hover:underline font-semibold flex items-center gap-1 cursor-pointer"
+              >
+                <span>⚙️ Meta App ID / Setup</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleFacebookDemoSignIn("Facebook Demo Customer")}
+                disabled={facebookLoading}
+                className="text-[11px] text-emerald-600 hover:text-emerald-800 hover:underline font-semibold flex items-center gap-1 cursor-pointer"
+              >
+                <span>⚡ 1-Click Test Sign-In</span>
+              </button>
+            </div>
+
+            {/* Expandable Facebook Configuration Card */}
+            {showFbSetup && (
+              <motion.div
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                className="p-3.5 bg-blue-50/80 border border-blue-200/90 rounded-2xl text-slate-700 text-xs space-y-3"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 font-bold text-blue-900 text-xs">
+                    <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Facebook Login Options</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowFbSetup(false)}
+                    className="text-slate-400 hover:text-slate-600 text-xs px-1"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <p className="text-[11px] text-slate-600 leading-normal">
+                  Meta requires an App ID to launch the official login popup on localhost. You can test right now or enter an App ID:
+                </p>
+
+                {/* Option 1: 1-Click Test Mode */}
+                <button
+                  type="button"
+                  onClick={() => handleFacebookDemoSignIn("Facebook Test Customer")}
+                  disabled={facebookLoading}
+                  className="w-full py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>⚡ 1-Click Test Sign-In (Instant Localhost Test)</span>
+                </button>
+
+                {/* Option 2: Enter Meta App ID */}
+                <form onSubmit={handleSaveFbAppIdAndConnect} className="pt-2 border-t border-blue-200/70 space-y-1.5">
+                  <label className="block text-[10px] font-bold text-blue-900 uppercase tracking-wide">
+                    Or Enter Your Meta / Facebook App ID:
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      placeholder="e.g. 15948392019485"
+                      value={customFbAppId}
+                      onChange={(e) => setCustomFbAppId(e.target.value)}
+                      className="flex-1 px-2.5 py-1.5 bg-white border border-blue-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden focus:border-blue-500 font-mono"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!customFbAppId.trim() || facebookLoading}
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl whitespace-nowrap disabled:opacity-50 cursor-pointer transition-colors"
+                    >
+                      Connect
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-500">
+                    Saved in browser localStorage. You can also set <code className="text-blue-700 font-mono">NEXT_PUBLIC_FACEBOOK_APP_ID</code> in <code className="text-blue-700 font-mono">.env.local</code>.
+                  </p>
+                </form>
+              </motion.div>
+            )}
           </div>
 
           <div className="mt-5 text-center text-xs text-slate-400">

@@ -6,26 +6,47 @@
 const DEFAULT_API_VERSION = "v19.0";
 
 /**
+ * Get Facebook App ID from localStorage or environment
+ */
+export const getFacebookAppId = () => {
+  if (typeof window !== "undefined") {
+    const saved = localStorage.getItem("ruchi_facebook_app_id");
+    if (saved && saved.trim()) return saved.trim();
+  }
+  return (
+    process.env.NEXT_PUBLIC_FACEBOOK_APP_ID ||
+    (typeof window !== "undefined" && window.__NEXT_DATA__?.runtimeConfig?.NEXT_PUBLIC_FACEBOOK_APP_ID) ||
+    ""
+  );
+};
+
+/**
  * Initialize Facebook JavaScript SDK
  */
-export const initFacebookSdk = () => {
+export const initFacebookSdk = (customAppId = null) => {
   return new Promise((resolve) => {
     if (typeof window === "undefined") {
       return resolve(null);
     }
 
-    // If FB is already loaded and initialized
-    if (window.FB) {
-      return resolve(window.FB);
-    }
-
-    const appId =
-      process.env.NEXT_PUBLIC_FACEBOOK_APP_ID ||
-      window.__NEXT_DATA__?.runtimeConfig?.NEXT_PUBLIC_FACEBOOK_APP_ID ||
-      "";
-
+    const appId = customAppId || getFacebookAppId();
     const apiVersion =
       process.env.NEXT_PUBLIC_FACEBOOK_API_VERSION || DEFAULT_API_VERSION;
+
+    // If FB is already loaded
+    if (window.FB && appId) {
+      try {
+        window.FB.init({
+          appId: appId,
+          cookie: true,
+          xfbml: true,
+          version: apiVersion,
+        });
+      } catch (e) {
+        // ignore
+      }
+      return resolve(window.FB);
+    }
 
     window.fbAsyncInit = function () {
       if (appId && appId !== "{your-app-id}") {
@@ -67,8 +88,8 @@ export const initFacebookSdk = () => {
 /**
  * Check current Facebook login status
  */
-export const getFacebookLoginStatus = async () => {
-  const FB = await initFacebookSdk();
+export const getFacebookLoginStatus = async (customAppId = null) => {
+  const FB = await initFacebookSdk(customAppId);
   return new Promise((resolve) => {
     if (!FB || typeof FB.getLoginStatus !== "function") {
       return resolve({ status: "unknown" });
@@ -94,24 +115,24 @@ export const checkLoginState = async (callback) => {
  * Log in with Facebook via Facebook JavaScript SDK
  * Requests public_profile,email scope and extracts user profile
  */
-export const loginWithFacebookSdk = () => {
+export const loginWithFacebookSdk = (customAppId = null) => {
   return new Promise(async (resolve, reject) => {
     if (typeof window === "undefined") {
       return reject(new Error("Facebook Login is only available in browser"));
     }
 
-    const appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
+    const appId = customAppId || getFacebookAppId();
     if (!appId || appId === "{your-app-id}") {
-      return reject(
-        new Error(
-          "Facebook App ID is not configured. Please set NEXT_PUBLIC_FACEBOOK_APP_ID in frontend/.env.local"
-        )
-      );
+      const err = new Error("FACEBOOK_APP_ID_MISSING");
+      err.code = "FACEBOOK_APP_ID_MISSING";
+      return reject(err);
     }
 
-    const FB = await initFacebookSdk();
+    const FB = await initFacebookSdk(appId);
     if (!FB || typeof FB.login !== "function") {
-      return reject(new Error("Facebook SDK could not be loaded. Check your ad blocker or internet connection."));
+      return reject(
+        new Error("Facebook SDK could not be loaded. Check your ad blocker or internet connection.")
+      );
     }
 
     FB.login(
@@ -133,7 +154,6 @@ export const loginWithFacebookSdk = () => {
                   photoURL: profile.picture?.data?.url || null,
                 });
               } else {
-                // If Graph API call had an issue, fallback with basic ID info
                 resolve({
                   accessToken,
                   userID,
@@ -153,4 +173,18 @@ export const loginWithFacebookSdk = () => {
       { scope: "public_profile,email", return_scopes: true }
     );
   });
+};
+
+/**
+ * Local development test / simulated Facebook login (when Meta App ID is not yet created)
+ */
+export const loginWithFacebookDemo = async (customName = "Facebook User") => {
+  const mockId = Math.floor(100000000000000 + Math.random() * 900000000000000).toString();
+  return {
+    accessToken: `demo_fb_token_${Date.now()}`,
+    userID: mockId,
+    email: `fb_user_${mockId.slice(-4)}@facebook.com`,
+    name: customName,
+    photoURL: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150`,
+  };
 };
