@@ -170,6 +170,95 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Sign in with Facebook (via Facebook JS SDK with Firebase fallback)
+  const loginWithFacebook = async () => {
+    try {
+      let fbProfile = null;
+
+      // 1. Try direct Facebook JavaScript SDK first (as requested)
+      try {
+        const { loginWithFacebookSdk } = await import("../lib/facebook");
+        fbProfile = await loginWithFacebookSdk();
+      } catch (sdkErr) {
+        console.warn("Direct Facebook JS SDK attempt:", sdkErr?.message);
+        if (
+          sdkErr?.message?.toLowerCase().includes("cancelled") ||
+          sdkErr?.message?.toLowerCase().includes("closed")
+        ) {
+          return { success: false, message: "Facebook login was cancelled." };
+        }
+      }
+
+      // 2. If SDK was not configured with app ID or had script issues, fallback to Firebase FacebookAuthProvider
+      if (!fbProfile) {
+        try {
+          const { auth, facebookProvider } = await import("../lib/firebase");
+          if (auth && facebookProvider) {
+            const { signInWithPopup } = await import("firebase/auth");
+            const result = await signInWithPopup(auth, facebookProvider);
+            const fbUser = result.user;
+            const idToken = await fbUser.getIdToken();
+            fbProfile = {
+              accessToken: idToken,
+              userID: fbUser.uid,
+              email: fbUser.email,
+              name: fbUser.displayName,
+              photoURL: fbUser.photoURL,
+              phone: fbUser.phoneNumber || undefined,
+            };
+          }
+        } catch (fbAuthErr) {
+          console.warn("Firebase FacebookAuthProvider error:", fbAuthErr);
+          if (fbAuthErr.code === "auth/popup-closed-by-user") {
+            return {
+              success: false,
+              message: "Facebook login popup was closed before completing.",
+            };
+          }
+          if (fbAuthErr.code === "auth/operation-not-allowed") {
+            return {
+              success: false,
+              message:
+                "Facebook login is not enabled in Firebase Console (Authentication > Sign-in method > Facebook) or NEXT_PUBLIC_FACEBOOK_APP_ID is missing.",
+            };
+          }
+          if (fbAuthErr.code === "auth/account-exists-with-different-credential") {
+            return {
+              success: false,
+              message:
+                "An account already exists with the same email. Please sign in with Google or your Password.",
+            };
+          }
+        }
+      }
+
+      if (!fbProfile) {
+        return {
+          success: false,
+          message:
+            "Facebook login could not be completed. Please configure NEXT_PUBLIC_FACEBOOK_APP_ID in frontend/.env.local or enable Facebook in Firebase.",
+        };
+      }
+
+      const res = await apiClient.post("/auth/facebook", fbProfile);
+      const { user: userData, token } = res.data.data;
+
+      localStorage.setItem("token", token);
+      localStorage.setItem("user", JSON.stringify(userData));
+      setUser(userData);
+      getSocket();
+
+      return { success: true, user: userData };
+    } catch (error) {
+      console.error("Facebook login error:", error);
+      const message =
+        error.response?.data?.message ||
+        error.message ||
+        "Failed to sign in with Facebook";
+      return { success: false, message };
+    }
+  };
+
   // Logout
   const logout = async () => {
     try {
@@ -225,6 +314,7 @@ export const AuthProvider = ({ children }) => {
         requestOtp,
         loginWithOtp,
         loginWithGoogle,
+        loginWithFacebook,
         register,
         logout,
         updateUser,

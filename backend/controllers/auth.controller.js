@@ -335,6 +335,87 @@ const loginWithGoogle = asyncHandler(async (req, res) => {
   });
 });
 
+// Facebook OAuth Login
+const loginWithFacebook = asyncHandler(async (req, res) => {
+  const { accessToken, userID, email, name, photoURL, phone } = req.body;
+
+  let userEmail = email ? email.toLowerCase().trim() : null;
+  if (!userEmail && userID) {
+    userEmail = `fb_${userID}@facebook.com`;
+  }
+
+  if (!userEmail && !phone) {
+    throw new AppError("Email or Facebook User ID is required for Facebook Sign-In", 400, "MISSING_IDENTIFIER");
+  }
+
+  // Find user by email or by phone if provided
+  let user = null;
+  if (userEmail) {
+    user = await User.findOne({ where: { email: userEmail } });
+  }
+
+  if (!user && phone) {
+    user = await User.findOne({ where: { phone } });
+    if (user && !user.email && userEmail) {
+      user.email = userEmail;
+      await user.save();
+    }
+  }
+
+  let isNewUser = false;
+  if (!user) {
+    user = await User.create({
+      email: userEmail,
+      name: name || (userEmail ? userEmail.split("@")[0] : "Facebook User"),
+      phone: phone || null,
+      role: "CUSTOMER",
+      is_verified: true,
+      profile_image: photoURL || null,
+    });
+    isNewUser = true;
+
+    // Initialize shopping cart for new customer
+    await Cart.findOrCreate({ where: { user_id: user.id } });
+  } else {
+    // Update profile image if user doesn't have one
+    if (photoURL && !user.profile_image) {
+      user.profile_image = photoURL;
+      await user.save();
+    }
+    // Update name if default or missing
+    if (name && (!user.name || user.name.startsWith("User_") || user.name === user.email)) {
+      user.name = name;
+      await user.save();
+    }
+  }
+
+  if (user.is_blocked) {
+    throw new AppError("Your account has been suspended.", 403, "ACCOUNT_BLOCKED");
+  }
+
+  const needsPhone = !user.phone || user.phone.startsWith("g_") || user.phone.startsWith("fb_");
+  const { token, refreshToken } = generateTokens(user);
+  setTokenCookie(res, token);
+
+  res.json({
+    success: true,
+    message: isNewUser ? "Account created and logged in with Facebook" : "Logged in with Facebook successfully",
+    data: {
+      user: {
+        id: user.id,
+        name: user.name,
+        phone: user.phone || "",
+        email: user.email,
+        role: user.role,
+        profile_image: user.profile_image,
+      },
+      token,
+      refreshToken,
+      needsPhone,
+    },
+  });
+});
+
 // Logout
 const logout = asyncHandler(async (req, res) => {
   res.clearCookie("token");
@@ -502,6 +583,7 @@ module.exports = {
   verifyOtpAndLogin,
   loginWithPassword,
   loginWithGoogle,
+  loginWithFacebook,
   register,
   registerShop,
   registerDelivery,

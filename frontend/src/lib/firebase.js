@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, FacebookAuthProvider } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyBIME-DucrGA-m5_8qlHuHtYjlOaMzzPdI",
@@ -14,6 +14,7 @@ const firebaseConfig = {
 let app = null;
 let auth = null;
 let googleProvider = null;
+let facebookProvider = null;
 
 if (typeof window !== "undefined") {
   try {
@@ -21,9 +22,12 @@ if (typeof window !== "undefined") {
     auth = getAuth(app);
     googleProvider = new GoogleAuthProvider();
     googleProvider.setCustomParameters({ prompt: "select_account" });
+    facebookProvider = new FacebookAuthProvider();
+    facebookProvider.addScope("email");
+    facebookProvider.addScope("public_profile");
   } catch (error) {
     console.warn("Firebase initialization warning:", error);
   }
 }
 
-export { app, auth, googleProvider };
+export { app, auth, googleProvider, facebookProvider };

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import Navbar from "./Navbar";
 import MobileBottomNav from "./MobileBottomNav";
@@ -10,11 +10,17 @@ import AuthModal from "./AuthModal";
 import Footer from "./Footer";
 import LocationSelector from "./LocationSelector";
 import CompleteProfileModal from "./CompleteProfileModal";
+import { initFacebookSdk } from "../lib/facebook";
 
 export default function AppShell({ children }) {
   const pathname = usePathname();
   const [authOpen, setAuthOpen] = useState(false);
   const [locationOpen, setLocationOpen] = useState(false);
+
+  // Pre-initialize Facebook JS SDK in background
+  useEffect(() => {
+    initFacebookSdk();
+  }, []);
 
   // Check if current route belongs to a portal
   const isPortalRoute =
