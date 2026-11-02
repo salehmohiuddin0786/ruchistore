@@ -260,7 +260,7 @@ const getMe = asyncHandler(async (req, res) => {
   });
 });
 
-// Google OAuth / Firebase Login
+// Google OAuth Login
 const loginWithGoogle = asyncHandler(async (req, res) => {
   const { idToken, email, name, photoURL, phone, uid } = req.body;
 

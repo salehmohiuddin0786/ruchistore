@@ -115,30 +115,18 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Sign in with Google via Firebase
+  // Sign in with Google (Native Google Identity Services - No Firebase)
   const loginWithGoogle = async () => {
     try {
-      const { auth, googleProvider } = await import("../lib/firebase");
-      if (!auth || !googleProvider) {
-        return {
-          success: false,
-          message:
-            "Firebase is not initialized. Please set NEXT_PUBLIC_FIREBASE_API_KEY in frontend/.env.local",
-        };
-      }
-
-      const { signInWithPopup } = await import("firebase/auth");
-      const result = await signInWithPopup(auth, googleProvider);
-      const fbUser = result.user;
-      const idToken = await fbUser.getIdToken();
+      const { loginWithGoogleSdk } = await import("../lib/googleAuth");
+      const googleProfile = await loginWithGoogleSdk();
 
       const res = await apiClient.post("/auth/google", {
-        idToken,
-        email: fbUser.email,
-        name: fbUser.displayName,
-        photoURL: fbUser.photoURL,
-        phone: fbUser.phoneNumber || undefined,
-        uid: fbUser.uid,
+        accessToken: googleProfile.accessToken,
+        email: googleProfile.email,
+        name: googleProfile.name,
+        photoURL: googleProfile.photoURL,
+        uid: googleProfile.uid,
       });
 
       const { user: userData, token } = res.data.data;
@@ -151,97 +139,38 @@ export const AuthProvider = ({ children }) => {
       return { success: true, user: userData };
     } catch (error) {
       console.error("Google login error:", error);
-      let message =
+      const message =
         error.response?.data?.message ||
         error.message ||
         "Failed to sign in with Google";
-
-      if (error.code === "auth/popup-closed-by-user") {
-        message = "Google sign-in popup was closed before completing.";
-      } else if (error.code === "auth/unauthorized-domain") {
-        message =
-          "Domain unauthorized: Please add 'localhost' in Firebase Console > Authentication > Settings > Authorized domains.";
-      } else if (error.code === "auth/invalid-api-key") {
-        message =
-          "Invalid Firebase API key. Please check NEXT_PUBLIC_FIREBASE_API_KEY in frontend/.env.local";
-      }
-
       return { success: false, message };
     }
   };
 
-  // Sign in with Facebook (via Facebook JS SDK with Firebase fallback)
+  // Sign in with Facebook (Official Facebook JavaScript SDK - No Firebase)
   const loginWithFacebook = async () => {
     try {
-      let fbProfile = null;
-
-      // 1. Try direct Facebook JavaScript SDK first (as requested)
-      try {
-        const { loginWithFacebookSdk } = await import("../lib/facebook");
-        fbProfile = await loginWithFacebookSdk();
-      } catch (sdkErr) {
-        console.warn("Direct Facebook JS SDK attempt:", sdkErr?.message);
-        if (
-          sdkErr?.message?.toLowerCase().includes("cancelled") ||
-          sdkErr?.message?.toLowerCase().includes("closed")
-        ) {
-          return { success: false, message: "Facebook login was cancelled." };
-        }
-      }
-
-      // 2. If SDK was not configured with app ID or had script issues, fallback to Firebase FacebookAuthProvider
-      if (!fbProfile) {
-        try {
-          const { auth, facebookProvider } = await import("../lib/firebase");
-          if (auth && facebookProvider) {
-            const { signInWithPopup } = await import("firebase/auth");
-            const result = await signInWithPopup(auth, facebookProvider);
-            const fbUser = result.user;
-            const idToken = await fbUser.getIdToken();
-            fbProfile = {
-              accessToken: idToken,
-              userID: fbUser.uid,
-              email: fbUser.email,
-              name: fbUser.displayName,
-              photoURL: fbUser.photoURL,
-              phone: fbUser.phoneNumber || undefined,
-            };
-          }
-        } catch (fbAuthErr) {
-          console.warn("Firebase FacebookAuthProvider error:", fbAuthErr);
-          if (fbAuthErr.code === "auth/popup-closed-by-user") {
-            return {
-              success: false,
-              message: "Facebook login popup was closed before completing.",
-            };
-          }
-          if (fbAuthErr.code === "auth/operation-not-allowed") {
-            return {
-              success: false,
-              message:
-                "Facebook login is not enabled in Firebase Console (Authentication > Sign-in method > Facebook) or NEXT_PUBLIC_FACEBOOK_APP_ID is missing.",
-            };
-          }
-          if (fbAuthErr.code === "auth/account-exists-with-different-credential") {
-            return {
-              success: false,
-              message:
-                "An account already exists with the same email. Please sign in with Google or your Password.",
-            };
-          }
-        }
-      }
-
-      if (!fbProfile) {
-        return {
-          success: false,
-          message:
-            "Facebook login could not be completed. Please configure NEXT_PUBLIC_FACEBOOK_APP_ID in frontend/.env.local or enable Facebook in Firebase.",
-        };
-      }
+      const { loginWithFacebookSdk } = await import("../lib/facebook");
+      const fbProfile = await loginWithFacebookSdk();
 
       const res = await apiClient.post("/auth/facebook", fbProfile);
       const { user: userData, token } = res.data.data;
+
+      localStorage.setItem("token", token);
+      localStorage.setItem("user", JSON.stringify(userData));
+      setUser(userData);
+      getSocket();
+
+      return { success: true, user: userData };
+    } catch (error) {
+      console.error("Facebook login error:", error);
+      const message =
+        error.response?.data?.message ||
+        error.message ||
+        "Failed to sign in with Facebook";
+      return { success: false, message };
+    }
+  };
 
       localStorage.setItem("token", token);
       localStorage.setItem("user", JSON.stringify(userData));
