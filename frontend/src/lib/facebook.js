@@ -16,7 +16,7 @@ export const getFacebookAppId = () => {
   return (
     process.env.NEXT_PUBLIC_FACEBOOK_APP_ID ||
     (typeof window !== "undefined" && window.__NEXT_DATA__?.runtimeConfig?.NEXT_PUBLIC_FACEBOOK_APP_ID) ||
-    ""
+    "1786675889284317"
   );
 };
 

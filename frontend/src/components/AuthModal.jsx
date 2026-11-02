@@ -25,7 +25,11 @@ export default function AuthModal({ isOpen, onClose }) {
   useEffect(() => {
     if (typeof window !== "undefined" && isOpen) {
       const saved = localStorage.getItem("ruchi_facebook_app_id") || "";
-      if (saved) setCustomFbAppId(saved);
+      if (saved) {
+        setCustomFbAppId(saved);
+      } else {
+        setCustomFbAppId(process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || "1786675889284317");
+      }
     }
   }, [isOpen]);
 
@@ -131,7 +135,8 @@ export default function AuthModal({ isOpen, onClose }) {
       overrideAppId ||
       customFbAppId.trim() ||
       (typeof window !== "undefined" ? localStorage.getItem("ruchi_facebook_app_id") : "") ||
-      process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
+      process.env.NEXT_PUBLIC_FACEBOOK_APP_ID ||
+      "1786675889284317";
 
     if (!currentId || currentId.trim() === "" || currentId === "{your-app-id}") {
       setShowFbSetup(true);
