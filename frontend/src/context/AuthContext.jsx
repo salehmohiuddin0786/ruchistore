@@ -172,22 +172,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-      localStorage.setItem("token", token);
-      localStorage.setItem("user", JSON.stringify(userData));
-      setUser(userData);
-      getSocket();
-
-      return { success: true, user: userData };
-    } catch (error) {
-      console.error("Facebook login error:", error);
-      const message =
-        error.response?.data?.message ||
-        error.message ||
-        "Failed to sign in with Facebook";
-      return { success: false, message };
-    }
-  };
-
   // Logout
   const logout = async () => {
     try {
